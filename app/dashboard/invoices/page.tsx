@@ -67,7 +67,10 @@ export default function InvoicesPage() {
     }
   }
 
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; number: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    number: string
+  } | null>(null)
 
   const handleDelete = async (id: string) => {
     try {
@@ -156,7 +159,7 @@ export default function InvoicesPage() {
             <Skeleton className="h-10 w-36" />
           </div>
           <Card>
-            <CardContent className="divide-y">
+            <CardContent className="divide-y py-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <Skeleton className="h-8 w-8 shrink-0" />
@@ -237,7 +240,12 @@ export default function InvoicesPage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-destructive"
-                      onClick={() => setDeleteTarget({ id: inv._id, number: inv.invoiceNumber })}
+                      onClick={() =>
+                        setDeleteTarget({
+                          id: inv._id,
+                          number: inv.invoiceNumber,
+                        })
+                      }
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

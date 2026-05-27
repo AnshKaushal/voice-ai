@@ -56,6 +56,18 @@ function formatCurrency(n: number) {
   return `₹${n.toLocaleString("en-IN")}`
 }
 
+const ACCENT = "#2563eb"
+const ACCENT_LIGHT = "#dbeafe"
+const GRAY_100 = "#f3f4f6"
+const GRAY_200 = "#e5e7eb"
+const GRAY_600 = "#6b7280"
+const GRAY_900 = "#111827"
+const WHITE = "#ffffff"
+
+function isMobile() {
+  return typeof window !== "undefined" && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+}
+
 export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps) {
   const [business, setBusiness] = useState<BusinessData | null>(null)
 
@@ -83,261 +95,278 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
     }
   }
 
-  function getStatusBadge(status: string) {
+  function getStatusColor(status: string) {
     const colors: Record<string, string> = {
       paid: "#059669",
-      sent: "#2563eb",
+      sent: ACCENT,
       draft: "#d97706",
       cancelled: "#dc2626",
     }
-    return colors[status] || "#6b7280"
+    return colors[status] || GRAY_600
+  }
+
+  function generatePDFBlob(): Blob {
+    const doc = new jsPDF({ unit: "mm", format: "a4" })
+    const pw = doc.internal.pageSize.getWidth()
+    const ph = doc.internal.pageSize.getHeight()
+    const ml = 18
+    const mr = 18
+    const cw = pw - ml - mr
+    let y = 18
+    const biz = business || { name: "HisaabAI", email: "", phone: "", address: "", gstin: "" }
+
+    // Watermark
+    doc.setFontSize(48)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(230)
+    doc.text("BolKeBill", pw / 2, ph / 2, { align: "center", angle: -30 })
+
+    // Top accent bar
+    doc.setFillColor(37, 99, 235)
+    doc.rect(0, 0, pw, 4, "F")
+    doc.setFillColor(37, 99, 235)
+    doc.rect(0, ph - 4, pw, 4, "F")
+
+    doc.setTextColor(0)
+
+    // Business header
+    doc.setFontSize(20)
+    doc.setFont("helvetica", "bold")
+    doc.text(biz.name || "HisaabAI", ml, y)
+    y += 6
+
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(100)
+    if (biz.address) {
+      doc.text(biz.address, ml, y)
+      y += 4
+    }
+    doc.text(`${biz.email}${biz.phone ? ` | ${biz.phone}` : ""}`, ml, y)
+    y += 4
+    if (biz.gstin) {
+      doc.text(`GSTIN: ${biz.gstin}`, ml, y)
+      y += 4
+    }
+
+    // Separator
+    y += 2
+    doc.setDrawColor(37, 99, 235)
+    doc.setLineWidth(0.3)
+    doc.line(ml, y, pw - mr, y)
+    y += 6
+
+    // Invoice title + meta
+    doc.setFontSize(16)
+    doc.setFont("helvetica", "bold")
+    doc.setTextColor(37, 99, 235)
+    doc.text("INVOICE", ml, y)
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(GRAY_900)
+    doc.text(`#${invoice.invoiceNumber}`, pw / 2, y)
+    doc.text(formatDate(invoice.createdAt), pw - mr, y, { align: "right" })
+    y += 5
+
+    doc.setFontSize(8)
+    doc.setTextColor(getStatusColor(invoice.status))
+    doc.setFont("helvetica", "bold")
+    doc.text(invoice.status.toUpperCase(), ml, y)
+    doc.setTextColor(GRAY_900)
+    y += 8
+
+    // Bill To
+    doc.setFillColor(37, 99, 235)
+    doc.setTextColor(WHITE)
+    doc.setFontSize(8)
+    doc.setFont("helvetica", "bold")
+    doc.text("BILL TO", ml + 2, y + 4)
+    doc.rect(ml, y, cw, 7, "F")
+    y += 11
+    doc.setTextColor(GRAY_900)
+    doc.setFontSize(12)
+    doc.setFont("helvetica", "bold")
+    doc.text(invoice.customerName, ml, y)
+    y += 6
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "normal")
+    doc.setTextColor(GRAY_600)
+    if (invoice.customerPhone) {
+      doc.text(invoice.customerPhone, ml, y)
+      y += 4
+    }
+    if (invoice.customerEmail) {
+      doc.text(invoice.customerEmail, ml, y)
+      y += 4
+    }
+    doc.setTextColor(GRAY_900)
+    y += 4
+
+    // --- Items Table ---
+    if (invoice.items.length > 0) {
+      // Header
+      doc.setFillColor(37, 99, 235)
+      doc.setTextColor(WHITE)
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      const colDefs = [
+        { x: ml + 3, w: cw * 0.45, align: "left" as const, label: "ITEM" },
+        { x: ml + 3 + cw * 0.45, w: cw * 0.12, align: "center" as const, label: "QTY" },
+        { x: ml + 3 + cw * 0.57, w: cw * 0.18, align: "right" as const, label: "RATE" },
+        { x: ml + cw - 3, w: cw * 0.25, align: "right" as const, label: "AMOUNT" },
+      ]
+      doc.rect(ml, y, cw, 7, "F")
+      colDefs.forEach((c) => doc.text(c.label, c.x, y + 4.5, { align: c.align }))
+      y += 7
+
+      // Rows
+      doc.setTextColor(GRAY_900)
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(9)
+      let rowNum = 0
+      for (const item of invoice.items) {
+        if (y > ph - 30) {
+          doc.addPage()
+          y = 18
+          doc.setFillColor(37, 99, 235)
+          doc.rect(0, 0, pw, 4, "F")
+        }
+        rowNum++
+        if (rowNum % 2 === 0) {
+          doc.setFillColor(248, 250, 252)
+          doc.rect(ml, y - 3, cw, 7, "F")
+        }
+        const amt = item.total || item.quantity * item.price
+        doc.text(item.name, ml + 3, y + 1)
+        doc.text(String(item.quantity), ml + 3 + cw * 0.45 + cw * 0.06, y + 1, { align: "center" })
+        doc.text(formatCurrency(item.price), ml + 3 + cw * 0.57 + cw * 0.09, y + 1, { align: "right" })
+        doc.setFont("helvetica", "bold")
+        doc.text(formatCurrency(amt), ml + cw - 3, y + 1, { align: "right" })
+        doc.setFont("helvetica", "normal")
+        y += 7
+      }
+      y += 3
+    }
+
+    // --- Services ---
+    if (invoice.services.length > 0) {
+      doc.setFillColor(37, 99, 235)
+      doc.setTextColor(WHITE)
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.text("SERVICE", ml + 3, y + 4.5)
+      doc.text("AMOUNT", ml + cw - 3, y + 4.5, { align: "right" })
+      doc.rect(ml, y, cw, 7, "F")
+      y += 7
+      doc.setTextColor(GRAY_900)
+      doc.setFontSize(9)
+      doc.setFont("helvetica", "normal")
+      for (const s of invoice.services) {
+        if (y > ph - 30) {
+          doc.addPage()
+          y = 18
+        }
+        doc.text(s.name, ml + 3, y + 1)
+        doc.setFont("helvetica", "bold")
+        doc.text(formatCurrency(s.price), ml + cw - 3, y + 1, { align: "right" })
+        doc.setFont("helvetica", "normal")
+        y += 7
+      }
+      y += 3
+    }
+
+    // Spacer line
+    y += 2
+    doc.setDrawColor(37, 99, 235)
+    doc.setLineWidth(0.3)
+    doc.line(ml, y, pw - mr, y)
+    y += 5
+
+    // Totals
+    const tx = ml + cw - 65
+    const tvx = ml + cw - 3
+    const addLine = (label: string, val: string, bold = false, large = false, color?: string) => {
+      doc.setFont("helvetica", bold ? "bold" : "normal")
+      doc.setFontSize(large ? 13 : 10)
+      if (color) doc.setTextColor(color)
+      else doc.setTextColor(GRAY_900)
+      doc.text(label, tx, y)
+      doc.text(val, tvx, y, { align: "right" })
+      y += large ? 8 : 6
+    }
+    addLine("Subtotal", formatCurrency(invoice.subtotal))
+    if (invoice.labourCharges) addLine("Labour Charges", formatCurrency(invoice.labourCharges))
+    if (invoice.discount) addLine("Discount", `-${formatCurrency(invoice.discount)}`, false, false, "#dc2626")
+
+    doc.setDrawColor(37, 99, 235)
+    doc.setLineWidth(0.5)
+    doc.line(tx - 2, y, ml + cw, y)
+    y += 3
+    addLine("Total", formatCurrency(invoice.total), true, true)
+
+    // Notes
+    if (invoice.notes) {
+      y += 4
+      doc.setDrawColor(GRAY_200)
+      doc.line(ml, y, pw - mr, y)
+      y += 5
+      doc.setFontSize(8)
+      doc.setFont("helvetica", "bold")
+      doc.setTextColor(GRAY_600)
+      doc.text("NOTES", ml, y)
+      y += 4
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(9)
+      doc.text(invoice.notes, ml, y)
+      y += 5
+    }
+
+    // Footer
+    const footerY = ph - 10
+    doc.setDrawColor(GRAY_200)
+    doc.line(ml, footerY - 3, pw - mr, footerY - 3)
+    doc.setFontSize(7)
+    doc.setTextColor(180)
+    doc.text(`Generated by ${biz.name || "BolKeBill"}`, pw / 2, footerY + 1, { align: "center" })
+    doc.text(`Invoice #${invoice.invoiceNumber}`, pw / 2, footerY + 5, { align: "center" })
+
+    return doc.output("blob")
   }
 
   async function handleWhatsApp() {
-    const message = [
-      `Invoice: ${invoice.invoiceNumber}`,
-      `Customer: ${invoice.customerName}`,
-      "",
-      ...invoice.items.map(
-        (i) => `${i.name} x${i.quantity} = ${formatCurrency(i.total || i.quantity * i.price)}`,
-      ),
-      ...invoice.services.map((s) => `${s.name} = ${formatCurrency(s.price)}`),
-      invoice.labourCharges ? `Labour: ${formatCurrency(invoice.labourCharges)}` : "",
-      invoice.discount ? `Discount: -${formatCurrency(invoice.discount)}` : "",
-      "",
-      `Total: ${formatCurrency(invoice.total)}`,
-      invoice.notes ? `\nNotes: ${invoice.notes}` : "",
-      "",
-      `Generated by ${business?.name || "HisaabAI"}`,
-    ]
-      .filter(Boolean)
-      .join("\n")
+    const bizName = business?.name || "BolKeBill"
+    const message = `Thank you for your purchase from ${bizName}!
+
+Invoice: ${invoice.invoiceNumber}
+Total: ${formatCurrency(invoice.total)}
+
+Your invoice PDF is attached. Please keep it for your records.
+
+— ${bizName} (Powered by BolKeBill)`
 
     try {
-      const doc = new jsPDF({ unit: "mm", format: "a4" })
-      const pw = doc.internal.pageSize.getWidth()
-      const ph = doc.internal.pageSize.getHeight()
-      const ml = 20
-      const mr = 20
-      const cw = pw - ml - mr
-      let y = 20
-      const lineH = 6
+      const pdfBlob = generatePDFBlob()
+      const pdfFile = new File([pdfBlob], `Invoice_${invoice.invoiceNumber}.pdf`, { type: "application/pdf" })
+      await navigator.share({ files: [pdfFile], text: message, title: `Invoice ${invoice.invoiceNumber}` })
+      return
+    } catch {}
 
-      // --- Header: Business Details ---
-      if (business) {
-        doc.setFontSize(18)
-        doc.setFont("helvetica", "bold")
-        doc.text(business.name, ml, y)
-        y += 7
+    if (!isMobile()) {
+      const pdfBlob = generatePDFBlob()
+      const pdfUrl = URL.createObjectURL(pdfBlob)
+      const a = document.createElement("a")
+      a.href = pdfUrl
+      a.download = `Invoice_${invoice.invoiceNumber}.pdf`
+      a.click()
+      URL.revokeObjectURL(pdfUrl)
+      toast.info("Invoice PDF downloaded. WhatsApp opened — please attach the PDF to the chat.")
+    }
 
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "normal")
-        doc.setTextColor(100)
-        if (business.address) {
-          doc.text(business.address, ml, y)
-          y += 5
-        }
-        doc.text(`${business.email} | ${business.phone}`, ml, y)
-        y += 5
-        if (business.gstin) {
-          doc.text(`GSTIN: ${business.gstin}`, ml, y)
-          y += 5
-        }
-        doc.setTextColor(0)
-      } else {
-        doc.setFontSize(18)
-        doc.setFont("helvetica", "bold")
-        doc.text("INVOICE", pw / 2, y, { align: "center" })
-        y += 7
-      }
-
-      // Separator line
-      y += 3
-      doc.setDrawColor(220)
-      doc.setLineWidth(0.5)
-      doc.line(ml, y, pw - mr, y)
-      y += 8
-
-      // --- Invoice Title Row ---
-      doc.setFontSize(10)
-      doc.setFont("helvetica", "bold")
-      doc.text("INVOICE", ml, y)
-      doc.setFont("helvetica", "normal")
-      doc.text(`#${invoice.invoiceNumber}`, pw / 2, y)
-      doc.text(formatDate(invoice.createdAt), pw - mr, y, { align: "right" })
-      y += 5
-      doc.setFontSize(8)
-      doc.setTextColor(getStatusBadge(invoice.status))
-      doc.text(invoice.status.toUpperCase(), ml, y)
-      doc.setTextColor(0)
-
-      y += 10
-
-      // --- Billing Details ---
-      const billCol = cw / 2
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "bold")
-      doc.text("Bill To", ml, y)
-      doc.setFont("helvetica", "normal")
-      y += 5
-      doc.setFontSize(10)
-      doc.text(invoice.customerName, ml, y)
-      y += 5
-      if (invoice.customerPhone) {
-        doc.setFontSize(9)
-        doc.setTextColor(100)
-        doc.text(invoice.customerPhone, ml, y)
-        y += 4
-      }
-      if (invoice.customerEmail) {
-        doc.text(invoice.customerEmail, ml, y)
-        y += 4
-      }
-      doc.setTextColor(0)
-
-      // Reset y for items section
-      y = Math.max(y + 5, 75)
-
-      // --- Items Table Header ---
-      if (invoice.items.length > 0) {
-        doc.setDrawColor(200)
-        doc.setFillColor(245, 245, 245)
-        doc.rect(ml, y - 4, cw, 7, "F")
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        const cols = [
-          { x: ml + 3, align: "left" as const, label: "Item" },
-          { x: ml + cw - 80, align: "left" as const, label: "Qty" },
-          { x: ml + cw - 50, align: "right" as const, label: "Rate" },
-          { x: ml + cw - 3, align: "right" as const, label: "Amount" },
-        ]
-        cols.forEach((c) => doc.text(c.label, c.x, y, { align: c.align }))
-        y += 7
-        doc.setFont("helvetica", "normal")
-
-        for (const item of invoice.items) {
-          if (y > ph - 40) {
-            doc.addPage()
-            y = 20
-          }
-          const amount = item.total || item.quantity * item.price
-          doc.setFontSize(9)
-          doc.text(item.name, ml + 3, y)
-          doc.text(String(item.quantity), ml + cw - 80, y)
-          doc.text(formatCurrency(item.price), ml + cw - 50, y, { align: "right" })
-          doc.setFont("helvetica", "bold")
-          doc.text(formatCurrency(amount), ml + cw - 3, y, { align: "right" })
-          doc.setFont("helvetica", "normal")
-          y += 6
-        }
-        y += 3
-      }
-
-      // --- Services ---
-      if (invoice.services.length > 0) {
-        doc.setDrawColor(200)
-        doc.setFillColor(245, 245, 245)
-        doc.rect(ml, y - 4, cw, 7, "F")
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.text("Service", ml + 3, y)
-        doc.text("Amount", ml + cw - 3, y, { align: "right" })
-        y += 7
-        doc.setFont("helvetica", "normal")
-
-        for (const s of invoice.services) {
-          if (y > ph - 40) {
-            doc.addPage()
-            y = 20
-          }
-          doc.text(s.name, ml + 3, y)
-          doc.setFont("helvetica", "bold")
-          doc.text(formatCurrency(s.price), ml + cw - 3, y, { align: "right" })
-          doc.setFont("helvetica", "normal")
-          y += 6
-        }
-        y += 3
-      }
-
-      // --- Totals ---
-      doc.setDrawColor(200)
-      doc.line(ml, y, pw - mr, y)
-      y += 5
-
-      const totalX = ml + cw - 60
-      const totalValX = ml + cw - 3
-
-      function addTotalLine(label: string, value: string, bold = false, large = false) {
-        doc.setFont("helvetica", bold ? "bold" : "normal")
-        doc.setFontSize(large ? 12 : 9)
-        doc.text(label, totalX, y)
-        doc.text(value, totalValX, y, { align: "right" })
-        y += large ? 8 : 6
-      }
-
-      addTotalLine("Subtotal", formatCurrency(invoice.subtotal))
-      if (invoice.labourCharges) {
-        addTotalLine("Labour Charges", formatCurrency(invoice.labourCharges))
-      }
-      if (invoice.discount) {
-        addTotalLine("Discount", `-${formatCurrency(invoice.discount)}`)
-      }
-
-      doc.setDrawColor(100)
-      doc.line(totalX, y, ml + cw, y)
-      y += 3
-      addTotalLine("Total", formatCurrency(invoice.total), true, true)
-
-      // --- Notes ---
-      if (invoice.notes) {
-        y += 5
-        doc.setDrawColor(220)
-        doc.line(ml, y, pw - mr, y)
-        y += 5
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
-        doc.text("Notes:", ml, y)
-        y += 5
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(9)
-        doc.setTextColor(100)
-        doc.text(invoice.notes, ml, y)
-        doc.setTextColor(0)
-      }
-
-      // --- Footer ---
-      doc.setDrawColor(220)
-      doc.line(ml, ph - 15, pw - mr, ph - 15)
-      doc.setFontSize(8)
-      doc.setTextColor(150)
-      const footerText = `Generated by ${business?.name || "HisaabAI"}`
-      doc.text(footerText, pw / 2, ph - 10, { align: "center" })
-      doc.setTextColor(0)
-
-      const pdfBlob = doc.output("blob")
-      const pdfFile = new File(
-        [pdfBlob],
-        `Invoice_${invoice.invoiceNumber}.pdf`,
-        { type: "application/pdf" },
-      )
-
-      const shareData: ShareData = {
-        files: [pdfFile],
-        text: message,
-        title: `Invoice ${invoice.invoiceNumber}`,
-      }
-
-      if (navigator.canShare && navigator.canShare(shareData)) {
-        await navigator.share(shareData)
-      } else {
-        const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
-        window.open(url, "_blank")
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") {
-        const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
-        window.open(url, "_blank")
-      }
+    const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
+    if (isMobile()) {
+      window.location.href = url
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer")
     }
   }
 
@@ -346,178 +375,217 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
 
     const itemsRows = invoice.items
       .map(
-        (i) =>
-          `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${i.name}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${i.quantity}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${i.price.toLocaleString("en-IN")}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${(i.total || i.quantity * i.price).toLocaleString("en-IN")}</td></tr>`,
+        (i, idx) =>
+          `<tr${idx % 2 === 0 ? ' class="alt"' : ""}><td class="item-name">${i.name}</td><td class="item-qty">${i.quantity}</td><td class="item-rate">${formatCurrency(i.price)}</td><td class="item-amt">${formatCurrency(i.total || i.quantity * i.price)}</td></tr>`,
       )
       .join("")
 
     const servicesRows = invoice.services
       .map(
-        (s) =>
-          `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">${s.name}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${s.price.toLocaleString("en-IN")}</td></tr>`,
+        (s, idx) =>
+          `<tr${idx % 2 === 0 ? ' class="alt"' : ""}><td class="item-name">${s.name}</td><td class="item-amt">${formatCurrency(s.price)}</td></tr>`,
       )
       .join("")
 
     const printWindow = window.open("", "_blank")
     if (!printWindow) return
 
-    const statusColor = getStatusBadge(invoice.status)
+    const statusColor = getStatusColor(invoice.status)
 
     printWindow.document.write(`
       <html>
         <head>
           <title>Invoice ${invoice.invoiceNumber}</title>
           <style>
-            @page { margin: 15mm; }
+            :root {
+              --primary: oklch(0.704 0.04 256.788);
+              --background: oklch(0.9818 0.0054 95.0986);
+              --foreground: oklch(0.145 0 0);
+              --muted: oklch(0.923 0.003 48.717);
+              --muted-foreground: oklch(0.553 0.013 58.071);
+              --border: oklch(0.869 0.005 56.366);
+              --destructive: oklch(0.6368 0.2078 25.3313);
+            }
+            @page { margin: 12mm; }
             * { box-sizing: border-box; }
             body {
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-              color: #1f2937;
+              color: var(--foreground);
               margin: 0;
               padding: 0;
               line-height: 1.5;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
             }
-            .invoice-container {
+            .page {
               max-width: 800px;
               margin: 0 auto;
+              position: relative;
             }
+            .watermark {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%) rotate(-30deg);
+              font-size: 72px;
+              font-weight: 900;
+              color: var(--muted);
+              opacity: 0.3;
+              z-index: -1;
+              pointer-events: none;
+              letter-spacing: 8px;
+              user-select: none;
+            }
+            .top-bar, .bottom-bar {
+              height: 4px;
+              background: var(--primary);
+              margin: 0 -12mm;
+            }
+            .bottom-bar { margin-top: 16px; }
             .header {
               display: flex;
               justify-content: space-between;
               align-items: flex-start;
-              padding-bottom: 20px;
-              border-bottom: 2px solid #e5e7eb;
-              margin-bottom: 24px;
+              padding: 20px 0 16px;
+              border-bottom: 2px solid var(--primary);
+              margin-bottom: 20px;
             }
-            .business-info h1 {
+            .biz-name {
               font-size: 22px;
-              font-weight: 700;
-              margin: 0 0 4px 0;
-              color: #111827;
+              font-weight: 800;
+              color: var(--foreground);
+              margin: 0 0 2px;
             }
-            .business-info p {
-              margin: 2px 0;
-              font-size: 12px;
-              color: #6b7280;
+            .biz-detail {
+              font-size: 11px;
+              color: var(--muted-foreground);
+              margin: 1px 0;
             }
-            .invoice-meta {
+            .invoice-title {
               text-align: right;
             }
-            .invoice-meta h2 {
+            .invoice-title h2 {
               font-size: 20px;
-              font-weight: 700;
-              margin: 0 0 4px 0;
-              color: #111827;
+              font-weight: 800;
+              color: var(--primary);
+              margin: 0 0 2px;
             }
-            .invoice-meta p {
-              margin: 2px 0;
-              font-size: 12px;
-              color: #6b7280;
+            .invoice-title p {
+              font-size: 11px;
+              color: var(--muted-foreground);
+              margin: 1px 0;
             }
             .status-badge {
               display: inline-block;
-              padding: 3px 10px;
-              border-radius: 0;
-              font-size: 11px;
-              font-weight: 600;
+              padding: 2px 10px;
+              font-size: 10px;
+              font-weight: 700;
               text-transform: uppercase;
               letter-spacing: 0.5px;
               color: #fff;
               background: ${statusColor};
-              margin-top: 6px;
+              margin-top: 4px;
             }
-            .billing-section {
-              margin-bottom: 24px;
-            }
-            .billing-section h3 {
-              font-size: 12px;
-              font-weight: 600;
-              color: #6b7280;
-              text-transform: uppercase;
+            .bill-to-header {
+              background: var(--primary);
+              color: #fff;
+              font-size: 10px;
+              font-weight: 700;
+              padding: 5px 12px;
               letter-spacing: 0.5px;
-              margin: 0 0 8px 0;
+              margin-bottom: 8px;
             }
-            .billing-section p {
-              margin: 2px 0;
-              font-size: 14px;
-            }
-            .billing-section .name {
-              font-weight: 600;
+            .customer-name {
               font-size: 15px;
+              font-weight: 700;
+              margin: 0 0 2px;
+            }
+            .customer-detail {
+              font-size: 12px;
+              color: var(--muted-foreground);
+              margin: 1px 0;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin: 20px 0;
-              font-size: 13px;
+              margin: 16px 0;
+              font-size: 12px;
             }
             thead th {
-              background: #f9fafb;
-              padding: 10px 12px;
+              background: var(--primary);
+              color: #fff;
+              padding: 7px 10px;
               text-align: left;
-              font-weight: 600;
-              font-size: 12px;
-              color: #6b7280;
-              text-transform: uppercase;
+              font-size: 10px;
+              font-weight: 700;
               letter-spacing: 0.5px;
-              border-bottom: 2px solid #e5e7eb;
             }
             thead th:last-child { text-align: right; }
-            tbody td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; }
+            thead th:nth-child(2) { text-align: center; }
+            thead th:nth-child(3) { text-align: right; }
+            tbody td {
+              padding: 7px 10px;
+              border-bottom: 1px solid var(--border);
+            }
             tbody td:last-child { text-align: right; font-weight: 600; }
-            tbody tr:last-child td { border-bottom: 2px solid #e5e7eb; }
-            .totals { margin-left: auto; width: 280px; }
+            tbody td:nth-child(2) { text-align: center; }
+            tbody td:nth-child(3) { text-align: right; }
+            tbody tr.alt td { background: var(--background); }
+            .totals {
+              margin-left: auto;
+              width: 280px;
+              border-top: 2px solid var(--primary);
+              padding-top: 6px;
+            }
             .totals table { margin: 0; }
-            .totals td { padding: 6px 0; border: none; font-size: 13px; }
+            .totals td { padding: 4px 0; border: none; font-size: 12px; }
             .totals td:last-child { text-align: right; }
             .totals .grand-total td {
-              font-weight: 700;
-              font-size: 16px;
-              padding-top: 10px;
-              border-top: 2px solid #111827;
+              font-weight: 800;
+              font-size: 15px;
+              padding-top: 8px;
+              border-top: 2px solid var(--primary);
             }
             .notes-section {
-              margin-top: 32px;
-              padding-top: 16px;
-              border-top: 1px solid #e5e7eb;
+              margin-top: 20px;
+              padding-top: 12px;
+              border-top: 1px solid var(--muted);
             }
             .notes-section h4 {
-              font-size: 12px;
-              font-weight: 600;
-              color: #6b7280;
-              text-transform: uppercase;
+              font-size: 10px;
+              font-weight: 700;
+              color: var(--muted-foreground);
+              margin: 0 0 4px;
               letter-spacing: 0.5px;
-              margin: 0 0 6px 0;
             }
             .notes-section p {
-              font-size: 13px;
-              color: #6b7280;
+              font-size: 12px;
+              color: var(--muted-foreground);
               margin: 0;
             }
             .footer {
-              margin-top: 40px;
-              padding-top: 12px;
-              border-top: 1px solid #e5e7eb;
+              margin-top: 24px;
+              padding-top: 8px;
+              border-top: 1px solid var(--muted);
               text-align: center;
-              font-size: 11px;
-              color: #9ca3af;
-            }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              font-size: 10px;
+              color: var(--muted-foreground);
             }
           </style>
         </head>
         <body>
-          <div class="invoice-container">
+          <div class="page">
+            <div class="watermark">BolKeBill</div>
+            <div class="top-bar"></div>
 
             <div class="header">
-              <div class="business-info">
-                <h1>${biz.name || "HisaabAI"}</h1>
-                ${biz.address ? `<p>${biz.address}</p>` : ""}
-                <p>${biz.email}${biz.phone ? ` | ${biz.phone}` : ""}</p>
-                ${biz.gstin ? `<p>GSTIN: ${biz.gstin}</p>` : ""}
+              <div>
+                <p class="biz-name">${biz.name || "HisaabAI"}</p>
+                ${biz.address ? `<p class="biz-detail">${biz.address}</p>` : ""}
+                <p class="biz-detail">${biz.email}${biz.phone ? ` | ${biz.phone}` : ""}</p>
+                ${biz.gstin ? `<p class="biz-detail">GSTIN: ${biz.gstin}</p>` : ""}
               </div>
-              <div class="invoice-meta">
+              <div class="invoice-title">
                 <h2>INVOICE</h2>
                 <p>#${invoice.invoiceNumber}</p>
                 <p>${formatDate(invoice.createdAt)}</p>
@@ -525,21 +593,19 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
               </div>
             </div>
 
-            <div class="billing-section">
-              <h3>Bill To</h3>
-              <p class="name">${invoice.customerName}</p>
-              ${invoice.customerPhone ? `<p>${invoice.customerPhone}</p>` : ""}
-              ${invoice.customerEmail ? `<p>${invoice.customerEmail}</p>` : ""}
-            </div>
+            <div class="bill-to-header">BILL TO</div>
+            <p class="customer-name">${invoice.customerName}</p>
+            ${invoice.customerPhone ? `<p class="customer-detail">${invoice.customerPhone}</p>` : ""}
+            ${invoice.customerEmail ? `<p class="customer-detail">${invoice.customerEmail}</p>` : ""}
 
             ${invoice.items.length > 0 ? `
             <table>
               <thead>
                 <tr>
-                  <th style="width:50%">Item</th>
-                  <th style="width:12%">Qty</th>
+                  <th style="width:46%">Item</th>
+                  <th style="width:10%">Qty</th>
                   <th style="width:18%">Rate</th>
-                  <th style="width:20%">Amount</th>
+                  <th style="width:26%">Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -566,7 +632,7 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
               <table>
                 <tr><td>Subtotal</td><td>${formatCurrency(invoice.subtotal)}</td></tr>
                 ${invoice.labourCharges ? `<tr><td>Labour Charges</td><td>${formatCurrency(invoice.labourCharges)}</td></tr>` : ""}
-                ${invoice.discount ? `<tr><td>Discount</td><td>-${formatCurrency(invoice.discount)}</td></tr>` : ""}
+                ${invoice.discount ? `<tr><td style="color:#dc2626">Discount</td><td style="color:#dc2626">-${formatCurrency(invoice.discount)}</td></tr>` : ""}
                 <tr class="grand-total"><td>Total</td><td>${formatCurrency(invoice.total)}</td></tr>
               </table>
             </div>
@@ -579,9 +645,10 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
             ` : ""}
 
             <div class="footer">
-              Generated by ${biz.name || "HisaabAI"}
+              Generated by ${biz.name || "BolKeBill"} — Invoice #${invoice.invoiceNumber}
             </div>
 
+            <div class="bottom-bar"></div>
           </div>
         </body>
       </html>
@@ -594,7 +661,7 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
     return (
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={handleWhatsApp}>
-          <MessageSquare className="h-4 w-4" />
+          <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
           WhatsApp
         </Button>
         <Button size="sm" variant="outline" onClick={handleDownload}>
@@ -612,7 +679,7 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
         Mark as Paid
       </Button>
       <Button size="sm" variant="outline" onClick={handleWhatsApp}>
-        <MessageSquare className="h-4 w-4" />
+        <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
         WhatsApp
       </Button>
       <Button size="sm" variant="outline" onClick={handleDownload}>
