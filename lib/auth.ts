@@ -17,46 +17,70 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
         otp: { label: "OTP", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.otp) return null;
-
+        if (!credentials?.email) return null;
         const email = (credentials.email as string).toLowerCase();
-        const otp = credentials.otp as string;
 
-        await connectDB();
+        // OTP flow (used during registration)
+        if (credentials.otp) {
+          const otp = credentials.otp as string;
+          await connectDB();
 
-        const stored = await VerificationToken.findOne({
-          identifier: email,
-          token: otp,
-          expires: { $gt: new Date() },
-        });
-
-        if (!stored) return null;
-
-        await VerificationToken.deleteOne({ _id: stored._id });
-
-        let user = await User.findOne({ email });
-        if (!user) {
-          user = await User.create({
-            email,
-            emailVerified: new Date(),
-            onboardingCompleted: false,
+          const stored = await VerificationToken.findOne({
+            identifier: email,
+            token: otp,
+            expires: { $gt: new Date() },
           });
-        } else if (!user.emailVerified) {
-          user.emailVerified = new Date();
-          await user.save();
+
+          if (!stored) return null;
+
+          await VerificationToken.deleteOne({ _id: stored._id });
+
+          let user = await User.findOne({ email });
+          if (!user) {
+            user = await User.create({
+              email,
+              emailVerified: new Date(),
+              onboardingCompleted: false,
+            });
+          } else if (!user.emailVerified) {
+            user.emailVerified = new Date();
+            await user.save();
+          }
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name || "",
+            image: user.image || "",
+            onboardingCompleted: user.onboardingCompleted,
+            businessId: user.businessId?.toString() || null,
+          };
         }
 
-        return {
-          id: user._id.toString(),
-          email: user.email,
-          name: user.name || "",
-          image: user.image || "",
-          onboardingCompleted: user.onboardingCompleted,
-          businessId: user.businessId?.toString() || null,
-        };
+        // Password flow (used during login)
+        if (credentials.password) {
+          await connectDB();
+          const user = await User.findOne({ email });
+          if (!user || !user.password) return null;
+
+          const valid = await bcrypt.compare(credentials.password as string, user.password);
+          if (!valid) return null;
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            name: user.name || "",
+            image: user.image || "",
+            onboardingCompleted: user.onboardingCompleted,
+            businessId: user.businessId?.toString() || null,
+          };
+        }
+
+        return null;
       },
     }),
   ],
