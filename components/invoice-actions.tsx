@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { CheckCircle2, MessageSquare, Download } from "lucide-react"
-import { jsPDF } from "jspdf"
+import { CheckCircle2, Download } from "lucide-react"
 
 interface ActionInvoice {
   _id: string
@@ -65,10 +64,16 @@ const GRAY_900 = "#111827"
 const WHITE = "#ffffff"
 
 function isMobile() {
-  return typeof window !== "undefined" && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  return (
+    typeof window !== "undefined" &&
+    /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  )
 }
 
-export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps) {
+export function InvoiceActions({
+  invoice,
+  onStatusChange,
+}: InvoiceActionsProps) {
   const [business, setBusiness] = useState<BusinessData | null>(null)
 
   useEffect(() => {
@@ -105,263 +110,17 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
     return colors[status] || GRAY_600
   }
 
-  function generatePDFBlob(): Blob {
-    const doc = new jsPDF({ unit: "mm", format: "a4" })
-    const pw = doc.internal.pageSize.getWidth()
-    const ph = doc.internal.pageSize.getHeight()
-    const ml = 18
-    const mr = 18
-    const cw = pw - ml - mr
-    let y = 18
-    const biz = business || { name: "HisaabAI", email: "", phone: "", address: "", gstin: "" }
-
-    // Watermark
-    doc.setFontSize(48)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(230)
-    doc.text("BolKeBill", pw / 2, ph / 2, { align: "center", angle: -30 })
-
-    // Top accent bar
-    doc.setFillColor(37, 99, 235)
-    doc.rect(0, 0, pw, 4, "F")
-    doc.setFillColor(37, 99, 235)
-    doc.rect(0, ph - 4, pw, 4, "F")
-
-    doc.setTextColor(0)
-
-    // Business header
-    doc.setFontSize(20)
-    doc.setFont("helvetica", "bold")
-    doc.text(biz.name || "HisaabAI", ml, y)
-    y += 6
-
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(100)
-    if (biz.address) {
-      doc.text(biz.address, ml, y)
-      y += 4
-    }
-    doc.text(`${biz.email}${biz.phone ? ` | ${biz.phone}` : ""}`, ml, y)
-    y += 4
-    if (biz.gstin) {
-      doc.text(`GSTIN: ${biz.gstin}`, ml, y)
-      y += 4
-    }
-
-    // Separator
-    y += 2
-    doc.setDrawColor(37, 99, 235)
-    doc.setLineWidth(0.3)
-    doc.line(ml, y, pw - mr, y)
-    y += 6
-
-    // Invoice title + meta
-    doc.setFontSize(16)
-    doc.setFont("helvetica", "bold")
-    doc.setTextColor(37, 99, 235)
-    doc.text("INVOICE", ml, y)
-    doc.setFontSize(10)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(GRAY_900)
-    doc.text(`#${invoice.invoiceNumber}`, pw / 2, y)
-    doc.text(formatDate(invoice.createdAt), pw - mr, y, { align: "right" })
-    y += 5
-
-    doc.setFontSize(8)
-    doc.setTextColor(getStatusColor(invoice.status))
-    doc.setFont("helvetica", "bold")
-    doc.text(invoice.status.toUpperCase(), ml, y)
-    doc.setTextColor(GRAY_900)
-    y += 8
-
-    // Bill To
-    doc.setFillColor(37, 99, 235)
-    doc.setTextColor(WHITE)
-    doc.setFontSize(8)
-    doc.setFont("helvetica", "bold")
-    doc.text("BILL TO", ml + 2, y + 4)
-    doc.rect(ml, y, cw, 7, "F")
-    y += 11
-    doc.setTextColor(GRAY_900)
-    doc.setFontSize(12)
-    doc.setFont("helvetica", "bold")
-    doc.text(invoice.customerName, ml, y)
-    y += 6
-    doc.setFontSize(9)
-    doc.setFont("helvetica", "normal")
-    doc.setTextColor(GRAY_600)
-    if (invoice.customerPhone) {
-      doc.text(invoice.customerPhone, ml, y)
-      y += 4
-    }
-    if (invoice.customerEmail) {
-      doc.text(invoice.customerEmail, ml, y)
-      y += 4
-    }
-    doc.setTextColor(GRAY_900)
-    y += 4
-
-    // --- Items Table ---
-    if (invoice.items.length > 0) {
-      // Header
-      doc.setFillColor(37, 99, 235)
-      doc.setTextColor(WHITE)
-      doc.setFontSize(8)
-      doc.setFont("helvetica", "bold")
-      const colDefs = [
-        { x: ml + 3, w: cw * 0.45, align: "left" as const, label: "ITEM" },
-        { x: ml + 3 + cw * 0.45, w: cw * 0.12, align: "center" as const, label: "QTY" },
-        { x: ml + 3 + cw * 0.57, w: cw * 0.18, align: "right" as const, label: "RATE" },
-        { x: ml + cw - 3, w: cw * 0.25, align: "right" as const, label: "AMOUNT" },
-      ]
-      doc.rect(ml, y, cw, 7, "F")
-      colDefs.forEach((c) => doc.text(c.label, c.x, y + 4.5, { align: c.align }))
-      y += 7
-
-      // Rows
-      doc.setTextColor(GRAY_900)
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(9)
-      let rowNum = 0
-      for (const item of invoice.items) {
-        if (y > ph - 30) {
-          doc.addPage()
-          y = 18
-          doc.setFillColor(37, 99, 235)
-          doc.rect(0, 0, pw, 4, "F")
-        }
-        rowNum++
-        if (rowNum % 2 === 0) {
-          doc.setFillColor(248, 250, 252)
-          doc.rect(ml, y - 3, cw, 7, "F")
-        }
-        const amt = item.total || item.quantity * item.price
-        doc.text(item.name, ml + 3, y + 1)
-        doc.text(String(item.quantity), ml + 3 + cw * 0.45 + cw * 0.06, y + 1, { align: "center" })
-        doc.text(formatCurrency(item.price), ml + 3 + cw * 0.57 + cw * 0.09, y + 1, { align: "right" })
-        doc.setFont("helvetica", "bold")
-        doc.text(formatCurrency(amt), ml + cw - 3, y + 1, { align: "right" })
-        doc.setFont("helvetica", "normal")
-        y += 7
-      }
-      y += 3
-    }
-
-    // --- Services ---
-    if (invoice.services.length > 0) {
-      doc.setFillColor(37, 99, 235)
-      doc.setTextColor(WHITE)
-      doc.setFontSize(8)
-      doc.setFont("helvetica", "bold")
-      doc.text("SERVICE", ml + 3, y + 4.5)
-      doc.text("AMOUNT", ml + cw - 3, y + 4.5, { align: "right" })
-      doc.rect(ml, y, cw, 7, "F")
-      y += 7
-      doc.setTextColor(GRAY_900)
-      doc.setFontSize(9)
-      doc.setFont("helvetica", "normal")
-      for (const s of invoice.services) {
-        if (y > ph - 30) {
-          doc.addPage()
-          y = 18
-        }
-        doc.text(s.name, ml + 3, y + 1)
-        doc.setFont("helvetica", "bold")
-        doc.text(formatCurrency(s.price), ml + cw - 3, y + 1, { align: "right" })
-        doc.setFont("helvetica", "normal")
-        y += 7
-      }
-      y += 3
-    }
-
-    // Spacer line
-    y += 2
-    doc.setDrawColor(37, 99, 235)
-    doc.setLineWidth(0.3)
-    doc.line(ml, y, pw - mr, y)
-    y += 5
-
-    // Totals
-    const tx = ml + cw - 65
-    const tvx = ml + cw - 3
-    const addLine = (label: string, val: string, bold = false, large = false, color?: string) => {
-      doc.setFont("helvetica", bold ? "bold" : "normal")
-      doc.setFontSize(large ? 13 : 10)
-      if (color) doc.setTextColor(color)
-      else doc.setTextColor(GRAY_900)
-      doc.text(label, tx, y)
-      doc.text(val, tvx, y, { align: "right" })
-      y += large ? 8 : 6
-    }
-    addLine("Subtotal", formatCurrency(invoice.subtotal))
-    if (invoice.labourCharges) addLine("Labour Charges", formatCurrency(invoice.labourCharges))
-    if (invoice.discount) addLine("Discount", `-${formatCurrency(invoice.discount)}`, false, false, "#dc2626")
-
-    doc.setDrawColor(37, 99, 235)
-    doc.setLineWidth(0.5)
-    doc.line(tx - 2, y, ml + cw, y)
-    y += 3
-    addLine("Total", formatCurrency(invoice.total), true, true)
-
-    // Notes
-    if (invoice.notes) {
-      y += 4
-      doc.setDrawColor(GRAY_200)
-      doc.line(ml, y, pw - mr, y)
-      y += 5
-      doc.setFontSize(8)
-      doc.setFont("helvetica", "bold")
-      doc.setTextColor(GRAY_600)
-      doc.text("NOTES", ml, y)
-      y += 4
-      doc.setFont("helvetica", "normal")
-      doc.setFontSize(9)
-      doc.text(invoice.notes, ml, y)
-      y += 5
-    }
-
-    // Footer
-    const footerY = ph - 10
-    doc.setDrawColor(GRAY_200)
-    doc.line(ml, footerY - 3, pw - mr, footerY - 3)
-    doc.setFontSize(7)
-    doc.setTextColor(180)
-    doc.text(`Generated by ${biz.name || "BolKeBill"}`, pw / 2, footerY + 1, { align: "center" })
-    doc.text(`Invoice #${invoice.invoiceNumber}`, pw / 2, footerY + 5, { align: "center" })
-
-    return doc.output("blob")
-  }
-
   async function handleWhatsApp() {
     const bizName = business?.name || "BolKeBill"
-    const pdfUrl = `${window.location.origin}/api/invoices/${invoice._id}/pdf`
+    const invoiceUrl = `${window.location.origin}/invoice/${invoice._id}`
     const message = `Thank you for your purchase from ${bizName}!
 
 Invoice: ${invoice.invoiceNumber}
 Total: ${formatCurrency(invoice.total)}
 
-View your invoice: ${pdfUrl}
+View invoice: ${invoiceUrl}
 
 — ${bizName} (Powered by BolKeBill)`
-
-    try {
-      const pdfBlob = generatePDFBlob()
-      const pdfFile = new File([pdfBlob], `Invoice_${invoice.invoiceNumber}.pdf`, { type: "application/pdf" })
-      await navigator.share({ files: [pdfFile], text: message, title: `Invoice ${invoice.invoiceNumber}` })
-      return
-    } catch {}
-
-    if (!isMobile()) {
-      const pdfBlob = generatePDFBlob()
-      const pdfUrlBlob = URL.createObjectURL(pdfBlob)
-      const a = document.createElement("a")
-      a.href = pdfUrlBlob
-      a.download = `Invoice_${invoice.invoiceNumber}.pdf`
-      a.click()
-      URL.revokeObjectURL(pdfUrlBlob)
-      toast.success("Invoice PDF ready. WhatsApp opened with a link — you can also attach the downloaded PDF manually.")
-    }
 
     const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
     if (isMobile()) {
@@ -372,7 +131,13 @@ View your invoice: ${pdfUrl}
   }
 
   function handleDownload() {
-    const biz = business || { name: "HisaabAI", email: "", phone: "", address: "", gstin: "" }
+    const biz = business || {
+      name: "HisaabAI",
+      email: "",
+      phone: "",
+      address: "",
+      gstin: "",
+    }
 
     const itemsRows = invoice.items
       .map(
@@ -599,7 +364,9 @@ View your invoice: ${pdfUrl}
             ${invoice.customerPhone ? `<p class="customer-detail">${invoice.customerPhone}</p>` : ""}
             ${invoice.customerEmail ? `<p class="customer-detail">${invoice.customerEmail}</p>` : ""}
 
-            ${invoice.items.length > 0 ? `
+            ${
+              invoice.items.length > 0
+                ? `
             <table>
               <thead>
                 <tr>
@@ -613,9 +380,13 @@ View your invoice: ${pdfUrl}
                 ${itemsRows}
               </tbody>
             </table>
-            ` : ""}
+            `
+                : ""
+            }
 
-            ${invoice.services.length > 0 ? `
+            ${
+              invoice.services.length > 0
+                ? `
             <table>
               <thead>
                 <tr>
@@ -627,7 +398,9 @@ View your invoice: ${pdfUrl}
                 ${servicesRows}
               </tbody>
             </table>
-            ` : ""}
+            `
+                : ""
+            }
 
             <div class="totals">
               <table>
@@ -638,12 +411,16 @@ View your invoice: ${pdfUrl}
               </table>
             </div>
 
-            ${invoice.notes ? `
+            ${
+              invoice.notes
+                ? `
             <div class="notes-section">
               <h4>Notes</h4>
               <p>${invoice.notes}</p>
             </div>
-            ` : ""}
+            `
+                : ""
+            }
 
             <div class="footer">
               Generated by ${biz.name || "BolKeBill"} — Invoice #${invoice.invoiceNumber}
@@ -662,7 +439,12 @@ View your invoice: ${pdfUrl}
     return (
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={handleWhatsApp}>
-          <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
+          <img
+            src="/whatsapp.svg"
+            height={300}
+            width={300}
+            className="h-4 w-4"
+          />
           WhatsApp
         </Button>
         <Button size="sm" variant="outline" onClick={handleDownload}>

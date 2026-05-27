@@ -5,19 +5,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 ## Goal
-- Build a production-grade AI-powered voice-first business assistant SaaS (HisaabAI) with authentication, onboarding, dashboard, inventory, subscription billing, and professional invoice PDFs.
+- Build a cross-platform invoice sharing system (WhatsApp, email, public link) with identical light‑theme branding across all outputs (PDF, HTML print, public page, email attachment).
 
 ## Constraints & Preferences
-- Next.js 16 App Router (uses `proxy.ts` instead of `middleware.ts`)
-- TypeScript, Tailwind CSS v4, shadcn/ui with CSS variables theming
-- MongoDB + Mongoose, Groq SDK for AI, Razorpay for payments
-- next-auth v5 beta for authentication (Google OAuth + email OTP)
-- Landing page components use `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8` containers
-- Responsive on mobile, tablet, laptop, desktop
-- Multi-step onboarding after sign-up
-- OTP-based email sign-in flow with Brevo SMTP
-- All border-radius set to `0` (no rounded corners)
-- All price inputs use `type="text" inputMode="decimal"` with regex sanitization — no number spinners
+- All invoice outputs must use the exact same light‑theme colors (oklch values from globals.css `:root`), never dark mode.
+- wa.me URLs cannot attach files; WhatsApp sharing must fall back to a public invoice link.
+- The email send route generates a server‑side jsPDF and sends it as an attachment with a professional HTML template.
+- The public page `/invoice/[id]` must render the invoice in light theme only and provide a "Download PDF" button that produces output identical to the dashboard print/download.
+- No business details (name, address, phone, email, GSTIN) were showing in the invoice detail page's print/download — now fetched from `/api/business`.
 
 ## Progress
 ### Done
@@ -60,6 +55,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Installed recharts** for charting
 - **Updated sidebar** with Analytics navigation link
 
+### Done (cross-platform invoice sharing)
+- Created public API route `app/api/share/[id]/route.ts` (no auth, uses invoice ID as token).
+- Created public invoice page `app/invoice/[id]/page.tsx` — fully hardcoded oklch light‑theme colors, plain `<button>` (no shadcn/theme vars), `handleDownload` opens new window with same HTML template used by dashboard.
+- Replaced jsPDF‑based `app/api/invoices/[id]/pdf` with the public `/invoice/[id]` page.
+- Updated both WhatsApp handlers (`components/invoice-actions.tsx` and `app/dashboard/invoices/[id]/page.tsx`) to share the public invoice URL instead of trying to attach a PDF.
+- Added business‑data fetching to the invoice detail page so the print/download PDF now shows name, address, phone, email, GSTIN.
+- Upgraded the email send API (`app/api/invoices/[id]/send/route.ts`) with a professional branded HTML template and a fully styled jsPDF attachment (watermark, blue accent bars, BILL TO table, totals block, etc.).
+- Replaced all dynamic `getComputedStyle` reads in `handleDownload` with hardcoded light‑theme `:root` oklch values so the print PDF is always light‑theme regardless of the user's current mode.
+
 ### In Progress
 - (none)
 
@@ -70,18 +74,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Single business ID per user**: After onboarding, User has `businessId` reference to Business document. All data queries use this ID.
 - **Email OTP + Google OAuth dual auth**: Users sign up via email (OTP + password) or Google (skip password).
 - **JWT session strategy**: No DB sessions, JWT carries onboarding status, businessId, name. `updateSession()` passes explicit data to `jwt` callback.
-- **Browser print + jspdf for PDF**: Download uses `window.print()` via formatted HTML; WhatsApp share generates A4 PDF via `jspdf` + Web Share API with file attachment.
+- **Separate public invoice page from dashboard**: `/invoice/[id]` is publicly accessible (MongoDB ObjectID = unguessable token); `/dashboard/invoices/[id]` remains authenticated.
+- **`window.print()` for PDF on public page**: Opens a new window with the same HTML template used by the dashboard `handleDownload`, ensuring identical output.
+- **Email PDF as server‑side jsPDF**: Cannot use `window.print` server‑side, but styled to match HTML version closely (same brand colors #2563eb / ACCENT, watermark, BILL TO, totals).
 - **Razorpay Checkout modal for subscriptions**: Opens in-page with `subscription_id` — user never leaves the app. `callback_url` set in modal JS config (not subscription.create API, which rejects it).
 - **Subscription activation on callback**: Verify endpoint fetches subscription status from Razorpay and updates DB directly when user returns from checkout — bypasses webhook (which can't reach localhost).
 - **Logo hydration safety**: `AppLogo` renders empty spacer during SSR, swaps in theme-aware image only after client mount — prevents hydration mismatch.
 - **30-day free trial**: Onboarding sets trialStart/trialEnd. Voice parse checks credits > 0. Dashboard shows trial banner. Settings page has upgrade via Razorpay Checkout modal.
 
 ## Next Steps
-1. Configure Google OAuth credentials in `.env.local` (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
-2. Test full auth flow end-to-end: register → OTP → onboarding → dashboard
-3. Test Google OAuth flow: sign-in → onboarding (2 steps) → dashboard
-4. Test voice capture with real microphone and Groq API
-5. Write README with setup instructions
+1. Verify the WhatsApp shared link opens the public page in light theme on all devices.
+2. Confirm that the email‑attached PDF (jsPDF) uses the same brand colors as the HTML print version.
+3. Configure Google OAuth credentials in `.env.local` (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+4. Test full auth flow end-to-end: register → OTP → onboarding → dashboard
+5. Test Google OAuth flow: sign-in → onboarding (2 steps) → dashboard
 
 ## Critical Context
 - Build compiles with 27 routes + proxy (verified `npm run build` succeeds)
@@ -95,6 +101,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `scripts/` excluded from tsconfig to prevent Next.js build type errors
 - Price inputs are `type="text" inputMode="decimal"` — zero renders as empty string, not `0`
 - InvoiceActions fetches business data from `/api/business` on mount — business details appear in both jspdf (WhatsApp) and HTML print (PDF download) versions
+- `proxy.ts` middleware protects only `/dashboard` and `/onboarding`; `/invoice/[id]` and `/api/share/[id]` pass through without auth
+- `:root` light‑theme oklch values: `--primary: oklch(0.704 0.04 256.788)`, `--background: oklch(0.9818 0.0054 95.0986)`, `--foreground: oklch(0.145 0 0)`, `--muted: oklch(0.923 0.003 48.717)`, `--muted-foreground: oklch(0.553 0.013 58.071)`, `--border: oklch(0.869 0.005 56.366)`, `--destructive: oklch(0.6368 0.2078 25.3313)`
 ## Relevant Files
 - `lib/auth.ts`: NextAuth v5 config — JWT callback handles explicit updateSession data
 - `proxy.ts`: Route protection — blocks unauthenticated, enforces onboarding
@@ -120,5 +128,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `app/dashboard/analytics/page.tsx`: Detailed analytics with recharts, paid-plan gated features (top items, revenue by status)
 - `app/api/analytics/route.ts`: Analytics API — revenue by period, service usage, customer growth, status breakdown, top items, premium gating
 - `components/invoice-table.tsx`: Reusable InvoiceItemsTable, InvoiceServicesTable, InvoiceTotals components for tabular invoice editing
-- `app/globals.css`: `--radius: 0` for zero rounded corners
+- `app/globals.css`: `--radius: 0` for zero rounded corners; defines `:root` oklch light‑theme values used across all PDF/print/public outputs
+- `app/invoice/[id]/page.tsx`: Public invoice page — hardcoded oklch colors, plain `<button>`, `handleDownload` shares HTML template with dashboard
+- `app/api/share/[id]/route.ts`: Public API returning invoice + business data (no auth)
+- `app/api/invoices/[id]/send/route.ts`: Email send API with branded HTML template + styled jsPDF attachment
 - `tsconfig.json`: excludes `["node_modules", "scripts"]`

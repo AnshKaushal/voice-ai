@@ -129,49 +129,18 @@ export default function InvoiceDetailPage() {
     if (!invoice) return
 
     const bizName = business?.name || "BolKeBill"
-    const pdfUrl = `${window.location.origin}/api/invoices/${invoice._id}/pdf`
+    const invoiceUrl = `${window.location.origin}/invoice/${invoice._id}`
     const message = `Thank you for your purchase from ${bizName}!
 
 Invoice: ${invoice.invoiceNumber}
 Total: ₹${invoice.total.toLocaleString("en-IN")}
 
-View your invoice: ${pdfUrl}
+View invoice: ${invoiceUrl}
 
 — ${bizName} (Powered by BolKeBill)`
 
-    try {
-      const doc = new jsPDF({ unit: "mm", format: "a4" })
-      doc.setFontSize(16)
-      doc.text(`Invoice: ${invoice.invoiceNumber}`, 18, 30)
-      doc.setFontSize(12)
-      doc.text(`Customer: ${invoice.customerName}`, 18, 40)
-      doc.text(`Total: ₹${invoice.total.toLocaleString("en-IN")}`, 18, 50)
-      const pdfBlob = doc.output("blob")
-      const pdfFile = new File([pdfBlob], `Invoice_${invoice.invoiceNumber}.pdf`, { type: "application/pdf" })
-      await navigator.share({ files: [pdfFile], text: message, title: `Invoice ${invoice.invoiceNumber}` })
-      return
-    } catch {}
-
-    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-
-    if (!isMobile) {
-      const doc = new jsPDF({ unit: "mm", format: "a4" })
-      doc.setFontSize(16)
-      doc.text(`Invoice: ${invoice.invoiceNumber}`, 18, 30)
-      doc.setFontSize(12)
-      doc.text(`Customer: ${invoice.customerName}`, 18, 40)
-      doc.text(`Total: ₹${invoice.total.toLocaleString("en-IN")}`, 18, 50)
-      const pdfBlob = doc.output("blob")
-      const pdfUrlBlob = URL.createObjectURL(pdfBlob)
-      const a = document.createElement("a")
-      a.href = pdfUrlBlob
-      a.download = `Invoice_${invoice.invoiceNumber}.pdf`
-      a.click()
-      URL.revokeObjectURL(pdfUrlBlob)
-      toast.success("Invoice PDF ready. WhatsApp opened with a link — you can also attach the downloaded PDF manually.")
-    }
-
     const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
     if (isMobile) {
       window.location.href = url
     } else {
