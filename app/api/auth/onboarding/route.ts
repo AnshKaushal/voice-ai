@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/mongodb";
 import { User } from "@/lib/models/user";
 import { Business } from "@/lib/models/business";
 import bcrypt from "bcryptjs";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
   try {
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
       { email: session.user.email.toLowerCase() },
       updateData
     );
+
+    sendWelcomeEmail(session.user.email, personal.name).catch(() => {});
 
     return NextResponse.json({
       success: true,
