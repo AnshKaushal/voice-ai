@@ -128,13 +128,14 @@ export default function InvoiceDetailPage() {
   async function handleWhatsApp() {
     if (!invoice) return
 
-    const bizName = "BolKeBill"
+    const bizName = business?.name || "BolKeBill"
+    const pdfUrl = `${window.location.origin}/api/invoices/${invoice._id}/pdf`
     const message = `Thank you for your purchase from ${bizName}!
 
 Invoice: ${invoice.invoiceNumber}
 Total: ₹${invoice.total.toLocaleString("en-IN")}
 
-Your invoice PDF is attached. Please keep it for your records.
+View your invoice: ${pdfUrl}
 
 — ${bizName} (Powered by BolKeBill)`
 
@@ -146,16 +147,8 @@ Your invoice PDF is attached. Please keep it for your records.
       doc.text(`Customer: ${invoice.customerName}`, 18, 40)
       doc.text(`Total: ₹${invoice.total.toLocaleString("en-IN")}`, 18, 50)
       const pdfBlob = doc.output("blob")
-      const pdfFile = new File(
-        [pdfBlob],
-        `Invoice_${invoice.invoiceNumber}.pdf`,
-        { type: "application/pdf" },
-      )
-      await navigator.share({
-        files: [pdfFile],
-        text: message,
-        title: `Invoice ${invoice.invoiceNumber}`,
-      })
+      const pdfFile = new File([pdfBlob], `Invoice_${invoice.invoiceNumber}.pdf`, { type: "application/pdf" })
+      await navigator.share({ files: [pdfFile], text: message, title: `Invoice ${invoice.invoiceNumber}` })
       return
     } catch {}
 
@@ -169,15 +162,13 @@ Your invoice PDF is attached. Please keep it for your records.
       doc.text(`Customer: ${invoice.customerName}`, 18, 40)
       doc.text(`Total: ₹${invoice.total.toLocaleString("en-IN")}`, 18, 50)
       const pdfBlob = doc.output("blob")
-      const pdfUrl = URL.createObjectURL(pdfBlob)
+      const pdfUrlBlob = URL.createObjectURL(pdfBlob)
       const a = document.createElement("a")
-      a.href = pdfUrl
+      a.href = pdfUrlBlob
       a.download = `Invoice_${invoice.invoiceNumber}.pdf`
       a.click()
-      URL.revokeObjectURL(pdfUrl)
-      toast.info(
-        "Invoice PDF downloaded. WhatsApp opened — please attach the PDF to the chat.",
-      )
+      URL.revokeObjectURL(pdfUrlBlob)
+      toast.success("Invoice PDF ready. WhatsApp opened with a link — you can also attach the downloaded PDF manually.")
     }
 
     const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`

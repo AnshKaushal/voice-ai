@@ -335,12 +335,13 @@ export function InvoiceActions({ invoice, onStatusChange }: InvoiceActionsProps)
 
   async function handleWhatsApp() {
     const bizName = business?.name || "BolKeBill"
+    const pdfUrl = `${window.location.origin}/api/invoices/${invoice._id}/pdf`
     const message = `Thank you for your purchase from ${bizName}!
 
 Invoice: ${invoice.invoiceNumber}
 Total: ${formatCurrency(invoice.total)}
 
-Your invoice PDF is attached. Please keep it for your records.
+View your invoice: ${pdfUrl}
 
 — ${bizName} (Powered by BolKeBill)`
 
@@ -353,13 +354,13 @@ Your invoice PDF is attached. Please keep it for your records.
 
     if (!isMobile()) {
       const pdfBlob = generatePDFBlob()
-      const pdfUrl = URL.createObjectURL(pdfBlob)
+      const pdfUrlBlob = URL.createObjectURL(pdfBlob)
       const a = document.createElement("a")
-      a.href = pdfUrl
+      a.href = pdfUrlBlob
       a.download = `Invoice_${invoice.invoiceNumber}.pdf`
       a.click()
-      URL.revokeObjectURL(pdfUrl)
-      toast.info("Invoice PDF downloaded. WhatsApp opened — please attach the PDF to the chat.")
+      URL.revokeObjectURL(pdfUrlBlob)
+      toast.success("Invoice PDF ready. WhatsApp opened with a link — you can also attach the downloaded PDF manually.")
     }
 
     const url = `https://wa.me/${invoice.customerPhone || "91"}?text=${encodeURIComponent(message)}`
