@@ -6,6 +6,7 @@ import { Testimonials } from "@/components/landing/testimonials";
 import { Pricing } from "@/components/landing/pricing";
 import { CTA } from "@/components/landing/cta";
 import { Footer } from "@/components/landing/footer";
+import { DemoVideo } from "@/components/demo-video";
 
 export default function LandingPage() {
   return (
@@ -13,6 +14,9 @@ export default function LandingPage() {
       <Header />
       <main>
         <Hero />
+        <section className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <DemoVideo />
+        </section>
         <Features />
         <HowItWorks />
         <Testimonials />

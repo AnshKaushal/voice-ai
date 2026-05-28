@@ -41,6 +41,7 @@ import {
 } from "recharts"
 import { UpgradeDialog } from "@/components/upgrade-dialog"
 
+
 interface DashboardStats {
   totalInvoices: number
   totalRevenue: number

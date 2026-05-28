@@ -86,6 +86,17 @@ export async function POST(request: NextRequest) {
     const totals = calculateTotals(items, services, labourCharges, discount, taxRate);
 
     let customerId = body.customerId || null;
+    if (customerId) {
+      const customer = await Customer.findOneAndUpdate(
+        { _id: customerId, businessId },
+        {
+          $inc: { totalVisits: 1, totalSpent: totals.total },
+          $set: body.customerEmail ? { email: body.customerEmail } : {},
+        },
+        { new: true }
+      );
+      if (!customer) customerId = null;
+    }
     if (!customerId && body.customerName) {
       let customer = await Customer.findOne({
         businessId,

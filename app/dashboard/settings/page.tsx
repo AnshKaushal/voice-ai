@@ -37,6 +37,7 @@ import {
   Check,
   X,
   PartyPopper,
+  HelpCircle,
 } from "lucide-react"
 import {
   Select,
@@ -45,6 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { DemoVideo } from "@/components/demo-video"
 
 export default function SettingsPage() {
   return (
@@ -122,6 +124,7 @@ function SettingsContent() {
   const [exportFormat, setExportFormat] = useState("json")
   const [successPlan, setSuccessPlan] = useState<string | null>(null)
   const [downgradeDialogOpen, setDowngradeDialogOpen] = useState(false)
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false)
   const [downgradeTarget, setDowngradeTarget] = useState<string | null>(null)
   const [downgrading, setDowngrading] = useState(false)
 
@@ -355,11 +358,22 @@ function SettingsContent() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account and business settings
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your account and business settings
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setHelpDialogOpen(true)}
+          className="shrink-0"
+        >
+          <HelpCircle className="h-4 w-4" />
+          Help
+        </Button>
       </div>
 
       {needsUpgrade && (
@@ -847,6 +861,18 @@ function SettingsContent() {
             <Check className="h-4 w-4" />
             Got it
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>How to use BolKeBill™</DialogTitle>
+            <DialogDescription>
+              Watch this quick demo to learn how to create invoices, manage customers, and more.
+            </DialogDescription>
+          </DialogHeader>
+          <DemoVideo />
         </DialogContent>
       </Dialog>
     </div>
