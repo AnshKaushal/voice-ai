@@ -92,6 +92,8 @@ export async function Pricing() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {plans.map((plan) => {
             const isCurrentPlan = currentPlan === plan.name;
+            const isPaidUser = currentPlan === "Starter" || currentPlan === "Pro";
+            const isFreePlanOnPaid = plan.name === "Free" && isPaidUser;
             return (
               <Card
                 key={plan.name}
@@ -128,6 +130,10 @@ export async function Pricing() {
                     <Button className="w-full" variant="outline" disabled>
                       <ShieldCheck className="h-4 w-4 mr-2" />
                       Current Plan
+                    </Button>
+                  ) : isFreePlanOnPaid ? (
+                    <Button className="w-full" variant="outline" disabled>
+                      No longer available
                     </Button>
                   ) : (
                     <Button
