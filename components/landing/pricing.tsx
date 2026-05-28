@@ -2,7 +2,10 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ShieldCheck } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { connectDB } from "@/lib/mongodb";
+import { Business } from "@/lib/models/business";
 
 const plans = [
   {
@@ -54,7 +57,24 @@ const plans = [
   },
 ];
 
-export function Pricing() {
+export async function Pricing() {
+  const session = await auth();
+  let currentPlan: string | null = null;
+
+  const businessId = session?.user ? (session.user as unknown as Record<string, unknown>).businessId as string | null : null;
+  if (session?.user && businessId) {
+    await connectDB();
+    const business = await Business.findById(businessId).select("subscription subscriptionStatus").lean();
+    if (business && business.subscriptionStatus === "active") {
+      if (business.subscription === "starter") currentPlan = "Starter";
+      else if (business.subscription === "pro") currentPlan = "Pro";
+    } else {
+      currentPlan = "Free";
+    }
+  } else if (session?.user) {
+    currentPlan = "Free";
+  }
+
   return (
     <section id="pricing" className="border-t py-16 sm:py-20 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -70,43 +90,60 @@ export function Pricing() {
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
-          {plans.map((plan) => (
-            <Card
-              key={plan.name}
-              className={`relative ${plan.popular ? "border-primary shadow-lg" : "border-0 bg-background"}`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge>Most Popular</Badge>
-                </div>
-              )}
-              <CardContent className="p-6 pt-8">
-                <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
-                <div className="mb-6">
-                  <span className="text-4xl font-bold">{plan.price}</span>
-                  {plan.period && (
-                    <span className="text-muted-foreground ml-1">{plan.period}</span>
+          {plans.map((plan) => {
+            const isCurrentPlan = currentPlan === plan.name;
+            return (
+              <Card
+                key={plan.name}
+                className={`relative ${plan.popular && !isCurrentPlan ? "border-primary shadow-lg" : isCurrentPlan ? "border-green-500 shadow-lg" : "border-0 bg-background"}`}
+              >
+                {plan.popular && !isCurrentPlan && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge>Most Popular</Badge>
+                  </div>
+                )}
+                {isCurrentPlan && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-green-500 hover:bg-green-600">Current Plan</Badge>
+                  </div>
+                )}
+                <CardContent className="p-6 pt-8">
+                  <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                  <div className="mb-6">
+                    <span className="text-4xl font-bold">{plan.price}</span>
+                    {plan.period && (
+                      <span className="text-muted-foreground ml-1">{plan.period}</span>
+                    )}
+                  </div>
+                  <ul className="space-y-3 mb-8">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-sm">
+                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  {isCurrentPlan ? (
+                    <Button className="w-full" variant="outline" disabled>
+                      <ShieldCheck className="h-4 w-4 mr-2" />
+                      Current Plan
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full"
+                      variant={plan.popular ? "default" : "outline"}
+                      asChild
+                    >
+                      <Link href={session ? "/dashboard/settings" : "/register"}>
+                        {session ? "Switch Plan" : plan.cta}
+                      </Link>
+                    </Button>
                   )}
-                </div>
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  className="w-full"
-                  variant={plan.popular ? "default" : "outline"}
-                  asChild
-                >
-                  <Link href="/register">{plan.cta}</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>

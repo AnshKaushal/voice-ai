@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     const business = await Business.findById(businessId)
-      .select("credits subscription subscriptionStatus trialEnd")
+      .select("credits subscription subscriptionStatus trialEnd defaultTaxRate")
       .lean();
 
     if (!business) {
@@ -82,10 +82,11 @@ export async function POST(request: NextRequest) {
 
     const labourCharges = body.labourCharges || 0;
     const discount = body.discount || 0;
-    const totals = calculateTotals(items, services, labourCharges, discount);
+    const taxRate = "taxRate" in body ? (body.taxRate ?? 0) : (business.defaultTaxRate ?? 0);
+    const totals = calculateTotals(items, services, labourCharges, discount, taxRate);
 
-    let customerId = null;
-    if (body.customerName) {
+    let customerId = body.customerId || null;
+    if (!customerId && body.customerName) {
       let customer = await Customer.findOne({
         businessId,
         name: body.customerName,
@@ -123,6 +124,7 @@ export async function POST(request: NextRequest) {
       services,
       labourCharges,
       discount,
+      taxRate,
       subtotal: totals.subtotal,
       tax: totals.tax,
       total: totals.total,

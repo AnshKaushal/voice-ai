@@ -1,24 +1,34 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmailInput } from "@/components/email-input"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
 import {
   ArrowLeft,
   Download,
-  MessageSquare,
   Loader2,
   FileText,
   CheckCircle2,
   Send,
   XCircle,
   Mail,
+  Trash2,
+  ExternalLink,
 } from "lucide-react"
 import { jsPDF } from "jspdf"
 
@@ -44,6 +54,7 @@ interface Invoice {
   services: InvoiceService[]
   subtotal: number
   tax: number
+  taxRate: number
   discount: number
   labourCharges: number
   total: number
@@ -64,9 +75,15 @@ interface BusinessData {
 
 export default function InvoiceDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [loading, setLoading] = useState(true)
   const [business, setBusiness] = useState<BusinessData | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [emailConfirm, setEmailConfirm] = useState(false)
+  const [emailInputOpen, setEmailInputOpen] = useState(false)
+  const [customEmail, setCustomEmail] = useState("")
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   useEffect(() => {
     fetchInvoice()
@@ -106,22 +123,51 @@ export default function InvoiceDetailPage() {
     }
   }
 
-  async function handleSendEmail() {
-    if (!invoice || !invoice.customerEmail) {
-      toast.error("No email on this invoice")
-      return
-    }
+  async function handleDelete() {
     try {
+      const res = await fetch(`/api/invoices/${params.id}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) throw new Error("Failed to delete")
+      toast.success("Invoice deleted")
+      router.push("/dashboard/invoices")
+    } catch {
+      toast.error("Failed to delete invoice")
+      setDeleteConfirm(false)
+    }
+  }
+
+  async function handleSendEmail(to?: string) {
+    if (!invoice) return
+    setSendingEmail(true)
+    try {
+      const body = to ? { customerEmail: to } : {}
       const res = await fetch(`/api/invoices/${invoice._id}/send`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const err = await res.json()
         throw new Error(err.error || "Failed to send")
       }
-      toast.success("Invoice sent to " + invoice.customerEmail)
+      toast.success("Invoice sent to " + (to || invoice.customerEmail))
     } catch (err) {
       toast.error((err as Error).message || "Failed to send email")
+    } finally {
+      setSendingEmail(false)
+      setEmailConfirm(false)
+      setEmailInputOpen(false)
+      setCustomEmail("")
+    }
+  }
+
+  function handleEmailClick() {
+    if (!invoice) return
+    if (invoice.customerEmail) {
+      setEmailConfirm(true)
+    } else {
+      setEmailInputOpen(true)
     }
   }
 
@@ -300,6 +346,7 @@ View invoice: ${invoiceUrl}
                 <tr><td>Subtotal</td><td>₹${invoice.subtotal.toLocaleString("en-IN")}</td></tr>
                 ${invoice.labourCharges ? `<tr><td>Labour Charges</td><td>₹${invoice.labourCharges.toLocaleString("en-IN")}</td></tr>` : ""}
                 ${invoice.discount ? `<tr><td style="color:var(--destructive)">Discount</td><td style="color:var(--destructive)">-₹${invoice.discount.toLocaleString("en-IN")}</td></tr>` : ""}
+                ${invoice.tax > 0 ? `<tr><td>GST${invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}</td><td>₹${invoice.tax.toLocaleString("en-IN")}</td></tr>` : ""}
                 <tr class="grand-total"><td>Total</td><td>₹${invoice.total.toLocaleString("en-IN")}</td></tr>
               </table>
             </div>
@@ -371,6 +418,7 @@ View invoice: ${invoiceUrl}
     sent: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
     paid: "bg-green-500/10 text-green-600 dark:text-green-400",
     cancelled: "bg-red-500/10 text-red-600 dark:text-red-400",
+    credit: "bg-primary/10 text-primary",
   }
 
   return (
@@ -406,6 +454,10 @@ View invoice: ${invoiceUrl}
               <Send className="h-4 w-4" />
               Mark as Sent
             </Button>
+            <Button size="sm" onClick={() => updateStatus("credit")}>
+              <FileText className="h-4 w-4" />
+              Mark as Credit
+            </Button>
             <Button size="sm" onClick={() => updateStatus("paid")}>
               <CheckCircle2 className="h-4 w-4" />
               Mark as Paid
@@ -421,14 +473,50 @@ View invoice: ${invoiceUrl}
           </>
         )}
         {invoice.status === "sent" && (
-          <Button size="sm" onClick={() => updateStatus("paid")}>
-            <CheckCircle2 className="h-4 w-4" />
-            Mark as Paid
-          </Button>
+          <>
+            <Button size="sm" onClick={() => updateStatus("credit")}>
+              <FileText className="h-4 w-4" />
+              Mark as Credit
+            </Button>
+            <Button size="sm" onClick={() => updateStatus("paid")}>
+              <CheckCircle2 className="h-4 w-4" />
+              Mark as Paid
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => updateStatus("cancelled")}
+            >
+              <XCircle className="h-4 w-4" />
+              Cancel
+            </Button>
+          </>
+        )}
+        {invoice.status === "credit" && (
+          <>
+            <Button size="sm" onClick={() => updateStatus("paid")}>
+              <CheckCircle2 className="h-4 w-4" />
+              Mark as Paid
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => updateStatus("cancelled")}
+            >
+              <XCircle className="h-4 w-4" />
+              Cancel
+            </Button>
+          </>
         )}
         <Button size="sm" variant="outline" onClick={handleDownload}>
           <Download className="h-4 w-4" />
           PDF
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link href={`/invoice/${invoice._id}`} target="_blank">
+            <ExternalLink className="h-4 w-4" />
+            Public Page
+          </Link>
         </Button>
         <Button size="sm" variant="outline" onClick={handleWhatsApp}>
           <img
@@ -439,13 +527,85 @@ View invoice: ${invoiceUrl}
           />
           WhatsApp
         </Button>
-        {invoice.customerEmail && (
-          <Button size="sm" variant="outline" onClick={handleSendEmail}>
-            <Mail className="h-4 w-4" />
-            Send Email
-          </Button>
-        )}
+        <Button size="sm" variant="outline" onClick={handleEmailClick}>
+          <Mail className="h-4 w-4" />
+          Send Email
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-destructive ml-auto sm:ml-0"
+          onClick={() => setDeleteConfirm(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </Button>
       </div>
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        onOpenChange={setDeleteConfirm}
+        title="Delete Invoice"
+        description={`Are you sure you want to delete invoice ${invoice.invoiceNumber}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={emailConfirm}
+        onOpenChange={setEmailConfirm}
+        title="Send Email"
+        description={`Send invoice ${invoice.invoiceNumber} to ${invoice.customerEmail}?`}
+        confirmLabel={sendingEmail ? "Sending..." : "Send"}
+        onConfirm={() => handleSendEmail()}
+      />
+
+      <Dialog open={emailInputOpen} onOpenChange={setEmailInputOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogDescription>
+              This invoice has no email on file. Enter the customer&apos;s email
+              to send it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <EmailInput
+                id="sendEmail"
+                label="Email Address"
+                value={customEmail}
+                onChange={setCustomEmail}
+                placeholder="customer@example.com"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setEmailInputOpen(false)
+                  setCustomEmail("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!customEmail.includes("@") || sendingEmail}
+                onClick={() => handleSendEmail(customEmail)}
+              >
+                {sendingEmail ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                Send
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -560,6 +720,14 @@ View invoice: ${invoiceUrl}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Discount</span>
                 <span className="text-destructive">-₹{invoice.discount}</span>
+              </div>
+            )}
+            {invoice.tax > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  GST{invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}
+                </span>
+                <span>₹{invoice.tax}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-lg pt-2 border-t">

@@ -34,7 +34,7 @@ export function AppLogo({ href, className }: AppLogoProps) {
             alt="BolKeBill™"
             width={28}
             height={28}
-            className="md:hidden h-7 w-auto"
+            className="md:hidden h-8 w-auto"
             priority
           />
           <Image
@@ -42,7 +42,7 @@ export function AppLogo({ href, className }: AppLogoProps) {
             alt="BolKeBill™"
             width={110}
             height={28}
-            className="hidden md:block h-7 w-auto"
+            className="hidden md:block h-8 w-auto"
             priority
           />
         </>

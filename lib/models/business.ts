@@ -6,6 +6,7 @@ export interface IBusiness extends Document {
   phone: string;
   address: string;
   gstin?: string;
+  defaultTaxRate: number;
   businessType: "workshop" | "tyre_shop" | "pharmacy" | "hardware" | "wholesale" | "general";
   credits: number;
   subscription: "free" | "starter" | "pro";
@@ -24,6 +25,7 @@ const BusinessSchema = new Schema<IBusiness>(
     phone: { type: String, required: true, unique: true },
     address: { type: String, default: "" },
     gstin: { type: String, default: "" },
+    defaultTaxRate: { type: Number, default: 0 },
     businessType: {
       type: String,
       enum: ["workshop", "tyre_shop", "pharmacy", "hardware", "wholesale", "general"],

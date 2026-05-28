@@ -26,6 +26,7 @@ import {
   AlertCircle,
   TrendingUp,
   BarChart3,
+  Lock,
 } from "lucide-react"
 import {
   BarChart,
@@ -38,6 +39,7 @@ import {
   LineChart,
   Line,
 } from "recharts"
+import { UpgradeDialog } from "@/components/upgrade-dialog"
 
 interface DashboardStats {
   totalInvoices: number
@@ -69,6 +71,7 @@ interface AnalyticsData {
     totalInvoices: number
     totalCustomers: number
     averageInvoiceValue: number
+    outstandingCredit: number
   }
   meta: {
     period: string
@@ -105,6 +108,7 @@ const statusColors: Record<string, string> = {
   sent: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   paid: "bg-green-500/10 text-green-600 dark:text-green-400",
   cancelled: "bg-red-500/10 text-red-600 dark:text-red-400",
+  credit: "bg-primary/10 text-primary",
 }
 
 const CHART_COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#0891b2", "#ca8a04"]
@@ -118,9 +122,12 @@ export default function DashboardPage() {
   const [recentInvoices, setRecentInvoices] = useState<RecentInvoice[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [period, setPeriod] = useState("month")
+  const [period, setPeriod] = useState("week")
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = useState(true)
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [lockedPeriod, setLockedPeriod] = useState("")
+  const isPaid = analytics?.meta?.isPaid ?? false
 
   useEffect(() => {
     fetchStats()
@@ -129,6 +136,15 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchAnalytics()
   }, [period])
+
+  function handlePeriodChange(value: string) {
+    if (!isPaid && value !== "week") {
+      setLockedPeriod(value)
+      setUpgradeDialogOpen(true)
+      return
+    }
+    setPeriod(value)
+  }
 
   async function fetchStats() {
     try {
@@ -349,28 +365,52 @@ export default function DashboardPage() {
         <BarChart3 className="h-5 w-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Analytics</h2>
         <div className="ml-auto">
-          <Select value={period} onValueChange={setPeriod}>
+          <Select value={period} onValueChange={handlePeriodChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="week">Last 7 days</SelectItem>
-              <SelectItem value="month">Last 30 days</SelectItem>
-              <SelectItem value="quarter">Last 3 months</SelectItem>
-              <SelectItem value="year">Last 12 months</SelectItem>
+              <SelectItem value="month">
+                <span className="flex items-center gap-2">
+                  Last 30 days
+                  {!isPaid && <Lock className="h-3 w-3" />}
+                </span>
+              </SelectItem>
+              <SelectItem value="quarter">
+                <span className="flex items-center gap-2">
+                  Last 3 months
+                  {!isPaid && <Lock className="h-3 w-3" />}
+                </span>
+              </SelectItem>
+              <SelectItem value="year">
+                <span className="flex items-center gap-2">
+                  Last 12 months
+                  {!isPaid && <Lock className="h-3 w-3" />}
+                </span>
+              </SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       {analyticsLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="columns-1 md:columns-2 gap-4 space-y-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="break-inside-avoid">
+              <CardHeader>
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-48 w-full" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : analytics ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="columns-1 md:columns-2 gap-4 space-y-4">
           {/* Revenue Chart */}
-          <Card className="lg:col-span-2">
+          <Card className="break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-sm font-medium">Revenue</CardTitle>
             </CardHeader>
@@ -412,7 +452,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Customer Growth */}
-          <Card>
+          <Card className="break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-sm font-medium">Customers</CardTitle>
             </CardHeader>
@@ -445,7 +485,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Service Popularity */}
-          <Card className="lg:col-span-2">
+          <Card className="break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-sm font-medium">Most Used Services</CardTitle>
             </CardHeader>
@@ -479,11 +519,22 @@ export default function DashboardPage() {
           </Card>
 
           {/* Summary Cards */}
-          <Card>
+          <Card className="break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-sm font-medium">Period Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Total Revenue</span>
+                <span className="font-semibold">
+                  {formatCurrency(analytics.summary.totalRevenue - analytics.summary.outstandingCredit)}
+                  {analytics.summary.outstandingCredit > 0 && (
+                    <span className="text-primary ml-1">
+                      + {formatCurrency(analytics.summary.outstandingCredit)}
+                    </span>
+                  )}
+                </span>
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Avg. Invoice Value</span>
                 <span className="font-semibold">{formatCurrency(analytics.summary.averageInvoiceValue)}</span>
@@ -506,96 +557,106 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+          <Card className="break-inside-avoid">
+            <CardHeader>
+              <CardTitle className="text-lg">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {quickActions.map((action) => (
+                <Button
+                  key={action.title}
+                  variant={action.variant}
+                  className="justify-start h-auto py-3 px-4"
+                  asChild
+                >
+                  <Link href={action.href}>
+                    <action.icon className="mr-3 h-5 w-5 shrink-0" />
+                    <div className="text-left">
+                      <div className="font-medium">{action.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {action.description}
+                      </div>
+                    </div>
+                    <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </Button>
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="break-inside-avoid">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg">Recent Invoices</CardTitle>
+              {recentInvoices.length > 0 && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/dashboard/invoices">View all</Link>
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {recentInvoices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No invoices yet</p>
+                  <p className="text-xs mt-1">
+                    Start by creating your first invoice.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentInvoices.map((inv) => (
+                    <Link
+                      key={inv._id}
+                      href={`/dashboard/invoices/${inv._id}`}
+                      className="flex items-start gap-3 hover:bg-muted/50 rounded-lg p-2 -mx-2 transition-colors"
+                    >
+                      <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {inv.customerName}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{inv.invoiceNumber}</span>
+                          <span>·</span>
+                          <span>
+                            {new Date(inv.createdAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-medium">
+                          ₹{inv.total.toLocaleString("en-IN")}
+                        </p>
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${statusColors[inv.status]}`}
+                        >
+                          {inv.status}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {quickActions.map((action) => (
-              <Button
-                key={action.title}
-                variant={action.variant}
-                className="justify-start h-auto py-3 px-4"
-                asChild
-              >
-                <Link href={action.href}>
-                  <action.icon className="mr-3 h-5 w-5 shrink-0" />
-                  <div className="text-left">
-                    <div className="font-medium">{action.title}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {action.description}
-                    </div>
-                  </div>
-                  <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
-                </Link>
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Recent Invoices</CardTitle>
-            {recentInvoices.length > 0 && (
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/invoices">View all</Link>
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {recentInvoices.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No invoices yet</p>
-                <p className="text-xs mt-1">
-                  Start by creating your first invoice.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {recentInvoices.map((inv) => (
-                  <Link
-                    key={inv._id}
-                    href={`/dashboard/invoices/${inv._id}`}
-                    className="flex items-start gap-3 hover:bg-muted/50 rounded-lg p-2 -mx-2 transition-colors"
-                  >
-                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {inv.customerName}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{inv.invoiceNumber}</span>
-                        <span>·</span>
-                        <span>
-                          {new Date(inv.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-medium">
-                        ₹{inv.total.toLocaleString("en-IN")}
-                      </p>
-                      <Badge
-                        variant="secondary"
-                        className={`text-xs ${statusColors[inv.status]}`}
-                      >
-                        {inv.status}
-                      </Badge>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <UpgradeDialog
+        open={upgradeDialogOpen}
+        onOpenChange={setUpgradeDialogOpen}
+        feature={
+          lockedPeriod === "month"
+            ? "Last 30 days"
+            : lockedPeriod === "quarter"
+              ? "Last 3 months"
+              : lockedPeriod === "year"
+                ? "Last 12 months"
+                : undefined
+        }
+      />
     </div>
   )
 }

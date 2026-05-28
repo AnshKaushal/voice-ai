@@ -22,13 +22,16 @@ export async function PUT(request: Request) {
   if (error) return error;
 
   const body = await request.json();
-  const { name, phone, email, address, gstin } = body;
+  const { name, phone, email, address, gstin, defaultTaxRate } = body;
 
   await connectDB();
 
+  const update: Record<string, unknown> = { name, phone, email, address, gstin };
+  if (defaultTaxRate !== undefined) update.defaultTaxRate = defaultTaxRate;
+
   const business = await Business.findByIdAndUpdate(
     businessId,
-    { $set: { name, phone, email, address, gstin } },
+    { $set: update },
     { new: true, runValidators: true }
   ).select("-__v");
 

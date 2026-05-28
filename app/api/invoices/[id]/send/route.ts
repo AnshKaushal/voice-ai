@@ -20,7 +20,7 @@ function formatCurrency(n: number) {
 }
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { businessId, error } = await getAuthBusinessId()
@@ -29,15 +29,18 @@ export async function POST(
   try {
     await connectDB()
     const { id } = await params
+    const body = await request.json()
+    const toEmail = body.customerEmail || null
 
     const invoice = await Invoice.findOne({ _id: id, businessId }).lean()
     if (!invoice) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
     }
 
-    if (!invoice.customerEmail) {
+    const recipient = toEmail || invoice.customerEmail
+    if (!recipient) {
       return NextResponse.json(
-        { error: "No email on this invoice" },
+        { error: "No email on this invoice. Provide a customerEmail in the request body." },
         { status: 400 },
       )
     }
@@ -282,6 +285,8 @@ export async function POST(
         false,
         "#dc2626",
       )
+    if (invoice.tax > 0)
+      addLine(`GST${invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}`, formatCurrency(invoice.tax))
     doc.setDrawColor(37, 99, 235)
     doc.setLineWidth(0.5)
     doc.line(tx - 2, y, ml + cw, y)
@@ -324,7 +329,7 @@ export async function POST(
       from:
         process.env.EMAIL_FROM ||
         `"${business.name}" <${process.env.BREVO_SMTP_USER}>`,
-      to: invoice.customerEmail,
+      to: recipient,
       subject: `Invoice ${invoice.invoiceNumber} from ${business.name}`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 0;">

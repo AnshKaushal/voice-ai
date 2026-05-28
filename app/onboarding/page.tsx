@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { AppLogo } from "@/components/app-logo"
 import { PhoneInput } from "@/components/phone-input"
@@ -64,6 +66,7 @@ export default function OnboardingPage() {
 
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
 
   const isGoogleUser = !!session?.user?.image
   const totalSteps = isGoogleUser ? 2 : 3
@@ -74,7 +77,7 @@ export default function OnboardingPage() {
         personal.name.trim().length > 0 && personal.phone.trim().length >= 10
       )
     if (step === 2)
-      return business.name.trim().length > 0 && business.type.length > 0
+      return business.name.trim().length > 0 && business.type.length > 0 && acceptedTerms
     if (step === 3) return password.length >= 6 && password === confirmPassword
     return false
   }
@@ -88,6 +91,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           personal,
           business,
+          acceptedTerms,
           ...(isGoogleUser ? {} : { password }),
         }),
       })
@@ -278,6 +282,30 @@ export default function OnboardingPage() {
                     placeholder="Re-enter your password"
                   />
                 </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="terms"
+                  checked={acceptedTerms}
+                  onCheckedChange={(v) => setAcceptedTerms(v === true)}
+                  className="mt-0.5"
+                />
+                <label
+                  htmlFor="terms"
+                  className="text-sm text-muted-foreground leading-relaxed cursor-pointer"
+                >
+                  I accept the{" "}
+                  <Link
+                    href="/terms-and-conditions"
+                    target="_blank"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
+                  >
+                    Terms & Conditions
+                  </Link>
+                </label>
               </div>
             )}
 

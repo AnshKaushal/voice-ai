@@ -15,12 +15,13 @@ import {
 } from "@/components/ui/dialog"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PhoneInput } from "@/components/phone-input"
+import { EmailInput } from "@/components/email-input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSession } from "next-auth/react"
 import { signOut } from "next-auth/react"
 import { toast } from "sonner"
 import { Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import {
   Save,
   CreditCard,
@@ -37,6 +38,13 @@ import {
   X,
   PartyPopper,
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export default function SettingsPage() {
   return (
@@ -68,7 +76,6 @@ function loadRazorpayScript(): Promise<void> {
 }
 
 function SettingsContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session, update } = useSession()
 
@@ -83,6 +90,7 @@ function SettingsContent() {
     email: "",
     address: "",
     gstin: "",
+    defaultTaxRate: 0,
   })
 
   const [subscription, setSubscription] = useState({
@@ -105,9 +113,9 @@ function SettingsContent() {
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [deleteConfirmText, setDeleteConfirmText] = useState("")
 
   const [exporting, setExporting] = useState(false)
+  const [exportFormat, setExportFormat] = useState("json")
   const [successPlan, setSuccessPlan] = useState<string | null>(null)
 
   useEffect(() => {
@@ -143,6 +151,7 @@ function SettingsContent() {
               email: businessData.email || "",
               address: businessData.address || "",
               gstin: businessData.gstin || "",
+              defaultTaxRate: businessData.defaultTaxRate ?? 0,
             })
           }
           if (!subData.error) {
@@ -246,13 +255,13 @@ function SettingsContent() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const res = await fetch("/api/export")
+      const res = await fetch(`/api/export?format=${exportFormat}`)
       if (!res.ok) throw new Error("Failed to export")
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = "BolKeBill-export.json"
+      a.download = `BolKeBill-export-${session?.user?.email || "data"}.${exportFormat === "json" ? "json" : exportFormat === "csv" ? "csv" : "txt"}`
       a.click()
       URL.revokeObjectURL(url)
       toast.success("Data exported")
@@ -412,7 +421,7 @@ function SettingsContent() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-4 rounded-lg border">
+          <div className="flex items-center justify-between p-4 rounded-lg border border-primary">
             <div className="flex items-center gap-3">
               <CreditCard className="h-5 w-5 text-muted-foreground" />
               <div>
@@ -434,9 +443,9 @@ function SettingsContent() {
             </div>
             <div className="text-right">
               <p className="font-medium">{subscription.credits} credits left</p>
-              <p className="text-xs text-muted-foreground">
+              {/* <p className="text-xs text-muted-foreground">
                 {subscription.monthlyCredits}/month
-              </p>
+              </p> */}
             </div>
           </div>
 
@@ -478,8 +487,13 @@ function SettingsContent() {
                     <li>Unlimited invoices</li>
                     <li>Inventory management</li>
                     <li>Customer management</li>
-                    <li className="text-primary/70">₹5 per additional transcription</li>
-                    <li className="text-primary/70">₹2 per additional invoice</li>
+                    <li>Basic analytics (7-day view)</li>
+                    <li className="text-primary/70">
+                      ₹5 per additional transcription
+                    </li>
+                    <li className="text-primary/70">
+                      ₹2 per additional invoice
+                    </li>
                   </ul>
                   {isActive && subscription.subscription === "starter" ? (
                     <Button
@@ -523,8 +537,12 @@ function SettingsContent() {
                     <li>Unlimited invoices</li>
                     <li>Priority support</li>
                     <li>Advanced analytics</li>
-                    <li className="text-primary/70">₹3 per additional transcription</li>
-                    <li className="text-primary/70">₹1 per additional invoice</li>
+                    <li className="text-primary/70">
+                      ₹3 per additional transcription
+                    </li>
+                    <li className="text-primary/70">
+                      ₹1 per additional invoice
+                    </li>
                   </ul>
                   {isActive && subscription.subscription === "pro" ? (
                     <Button
@@ -576,14 +594,11 @@ function SettingsContent() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
+              <EmailInput
                 id="email"
-                type="email"
+                label="Email"
                 value={business.email}
-                onChange={(e) =>
-                  setBusiness((prev) => ({ ...prev, email: e.target.value }))
-                }
+                onChange={(v) => setBusiness((prev) => ({ ...prev, email: v }))}
               />
             </div>
           </div>
@@ -607,6 +622,25 @@ function SettingsContent() {
               }
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="defaultTaxRate">Default GST Rate (%)</Label>
+            <Input
+              id="defaultTaxRate"
+              type="text"
+              inputMode="decimal"
+              value={business.defaultTaxRate || ""}
+              onChange={(e) => {
+                const v = e.target.value
+                setBusiness((prev) => ({
+                  ...prev,
+                  defaultTaxRate: v === "" ? 0 : parseFloat(v) || 0,
+                }))
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Applied automatically when creating new invoices.
+            </p>
+          </div>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -626,13 +660,24 @@ function SettingsContent() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex-1">
               <p className="font-medium">Download your data</p>
               <p className="text-sm text-muted-foreground">
-                Export all your invoices, customers, inventory and settings as
-                JSON.
+                Export all your invoices, customers, inventory and settings.
               </p>
+              <div className="mt-2">
+                <Select value={exportFormat} onValueChange={setExportFormat}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="json">JSON</SelectItem>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="txt">TXT</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button
               variant="outline"
@@ -805,14 +850,18 @@ function SettingsContent() {
       const options: Record<string, unknown> = {
         key: razorpayKey,
         name: "BolKeBill™",
-        description: planId === "pro" ? "Pro Plan - ₹999/mo" : "Starter Plan - ₹499/mo",
+        description:
+          planId === "pro" ? "Pro Plan - ₹999/mo" : "Starter Plan - ₹499/mo",
         subscription_id: data.subscriptionId,
         modal: {
           ondismiss: () => {
             toast.error("Payment was cancelled")
           },
         },
-        handler: async function (this: unknown, response: Record<string, string>) {
+        handler: async function (
+          this: unknown,
+          response: Record<string, string>,
+        ) {
           try {
             const subId = response.razorpay_subscription_id
             if (subId) {

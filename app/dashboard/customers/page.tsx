@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -13,6 +14,7 @@ import {
   IndianRupee,
   Loader2,
   ShoppingBag,
+  ChevronRight,
 } from "lucide-react"
 
 interface Customer {
@@ -73,7 +75,7 @@ export default function CustomersPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i}>
-              <CardContent className="pt-6">
+              <CardContent>
                 <div className="flex items-center gap-3 mb-4">
                   <Skeleton className="h-10 w-10 rounded-full" />
                   <div className="space-y-1 flex-1">
@@ -103,45 +105,45 @@ export default function CustomersPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredCustomers.map((customer) => (
-            <Card
-              key={customer._id}
-              className="hover:shadow-md transition-shadow"
-            >
-              <CardContent>
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">{customer.name}</p>
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                        <Phone className="h-3 w-3" />
-                        {customer.phone}
+            <Link key={customer._id} href={`/dashboard/customers/${customer._id}`}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardContent>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-sm">{customer.name}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <Phone className="h-3 w-3" />
+                          {customer.phone}
+                        </div>
                       </div>
                     </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
                   </div>
-                </div>
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>{customer.totalVisits} visits</span>
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-1">
+                      <ShoppingBag className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{customer.totalVisits} visits</span>
+                    </div>
+                    <div className="flex items-center">
+                      <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>{customer.totalSpent.toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>₹{customer.totalSpent.toLocaleString()}</span>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Customer since{" "}
-                  {new Date(customer.createdAt).toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    year: "numeric",
-                    month: "long",
-                  })}
-                </p>
-              </CardContent>
-            </Card>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Customer since{" "}
+                    {new Date(customer.createdAt).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      year: "numeric",
+                      month: "long",
+                    })}
+                  </p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

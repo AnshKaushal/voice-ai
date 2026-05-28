@@ -19,14 +19,14 @@ export async function GET() {
       await Promise.all([
         Invoice.countDocuments({ businessId }),
         Invoice.aggregate([
-          { $match: { businessId: bizId } },
+          { $match: { businessId: bizId, status: { $ne: "cancelled" } } },
           { $group: { _id: null, total: { $sum: "$total" } } },
         ]),
         Customer.countDocuments({ businessId }),
         Invoice.countDocuments({ businessId, source: "voice" }),
         Invoice.find({ businessId })
           .sort({ createdAt: -1 })
-          .limit(5)
+          .limit(4)
           .select("customerName total status invoiceNumber createdAt")
           .lean(),
         Business.findById(businessId)

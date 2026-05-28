@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,10 +9,25 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { InvoiceActions } from "@/components/invoice-actions"
-import { InvoiceItemsTable, InvoiceServicesTable, InvoiceTotals } from "@/components/invoice-table"
+import {
+  InvoiceItemsTable,
+  InvoiceServicesTable,
+  InvoiceTotals,
+} from "@/components/invoice-table"
 import { PhoneInput } from "@/components/phone-input"
-import { Save, Plus, Trash2, Loader2, ArrowLeft, FileText, CheckCircle2 } from "lucide-react"
+import { EmailInput } from "@/components/email-input"
+import { CustomerCombobox } from "@/components/customer-combobox"
+import {
+  Save,
+  Plus,
+  Trash2,
+  Loader2,
+  ArrowLeft,
+  FileText,
+  CheckCircle2,
+} from "lucide-react"
 import Link from "next/link"
+import { Label } from "@/components/ui/label"
 
 interface InvoiceItem {
   name: string
@@ -34,15 +49,21 @@ function calculateTotal(
   services: InvoiceService[],
   labour: number,
   discount: number,
+  taxRate: number,
 ) {
-  const itemsTotal = items.reduce((s, i) => s + calcItemTotal(i.quantity, i.price), 0)
+  const itemsTotal = items.reduce(
+    (s, i) => s + calcItemTotal(i.quantity, i.price),
+    0,
+  )
   const servicesTotal = services.reduce((s, sv) => s + (sv.price || 0), 0)
   const subtotal = itemsTotal + servicesTotal + (labour || 0)
+  const tax = (subtotal * (taxRate || 0)) / 100
   return {
     itemsTotal,
     servicesTotal,
     subtotal: Math.round(subtotal * 100) / 100,
-    total: Math.round((subtotal - (discount || 0)) * 100) / 100,
+    tax: Math.round(tax * 100) / 100,
+    total: Math.round((subtotal + tax - (discount || 0)) * 100) / 100,
   }
 }
 
@@ -52,14 +73,30 @@ export default function NewInvoicePage() {
   const [customerName, setCustomerName] = useState("")
   const [customerPhone, setCustomerPhone] = useState("")
   const [customerEmail, setCustomerEmail] = useState("")
+  const [customerId, setCustomerId] = useState<string | null>(null)
   const [items, setItems] = useState<InvoiceItem[]>([
     { name: "", quantity: 1, price: 0 },
   ])
   const [services, setServices] = useState<InvoiceService[]>([])
   const [labourCharges, setLabourCharges] = useState(0)
   const [discount, setDiscount] = useState(0)
+  const [taxRate, setTaxRate] = useState(0)
   const [notes, setNotes] = useState("")
-  const [createdInvoice, setCreatedInvoice] = useState<Record<string, unknown> | null>(null)
+  const [createdInvoice, setCreatedInvoice] = useState<Record<
+    string,
+    unknown
+  > | null>(null)
+
+  useEffect(() => {
+    fetch("/api/business")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error && data.defaultTaxRate) {
+          setTaxRate(data.defaultTaxRate)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const addItem = () => {
     setItems([...items, { name: "", quantity: 1, price: 0 }])
@@ -111,10 +148,12 @@ export default function NewInvoicePage() {
           customerName,
           customerPhone,
           customerEmail,
+          customerId,
           items,
           services,
           labourCharges,
           discount,
+          ...(taxRate ? { taxRate } : {}),
           notes,
           source: "manual",
         }),
@@ -123,7 +162,9 @@ export default function NewInvoicePage() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
         if (errData.creditsExhausted) {
-          toast.error("Manual invoice limit reached. Upgrade your plan to continue.")
+          toast.error(
+            "Manual invoice limit reached. Upgrade your plan to continue.",
+          )
           return
         }
         throw new Error("Failed to save")
@@ -145,14 +186,22 @@ export default function NewInvoicePage() {
     setCustomerName("")
     setCustomerPhone("")
     setCustomerEmail("")
+    setCustomerId(null)
     setItems([{ name: "", quantity: 1, price: 0 }])
     setServices([])
     setLabourCharges(0)
     setDiscount(0)
+    setTaxRate(0)
     setNotes("")
   }
 
-  const totals = calculateTotal(items, services, labourCharges, discount)
+  const totals = calculateTotal(
+    items,
+    services,
+    labourCharges,
+    discount,
+    taxRate,
+  )
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -176,12 +225,17 @@ export default function NewInvoicePage() {
               <div>
                 <p className="font-medium">Invoice Created</p>
                 <p className="text-sm text-muted-foreground">
-                  {(createdInvoice as Record<string, string>).invoiceNumber || "New Invoice"}
+                  {(createdInvoice as Record<string, string>).invoiceNumber ||
+                    "New Invoice"}
                 </p>
               </div>
             </div>
             <InvoiceActions
-              invoice={createdInvoice as unknown as Parameters<typeof InvoiceActions>[0]["invoice"]}
+              invoice={
+                createdInvoice as unknown as Parameters<
+                  typeof InvoiceActions
+                >[0]["invoice"]
+              }
               onStatusChange={() =>
                 setCreatedInvoice((prev) =>
                   prev ? { ...prev, status: "paid" } : prev,
@@ -194,9 +248,7 @@ export default function NewInvoicePage() {
                 New Invoice
               </Button>
               <Button variant="outline" className="flex-1" asChild>
-                <Link href="/dashboard/invoices">
-                  All Invoices
-                </Link>
+                <Link href="/dashboard/invoices">All Invoices</Link>
               </Button>
             </div>
           </CardContent>
@@ -212,11 +264,24 @@ export default function NewInvoicePage() {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Customer Name</label>
-                <Input
+                <CustomerCombobox
+                  id="customer-name"
+                  label="Customer Name"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer name"
+                  onChange={(v) => {
+                    setCustomerName(v)
+                    if (v === "") {
+                      setCustomerId(null)
+                      setCustomerPhone("")
+                      setCustomerEmail("")
+                    }
+                  }}
+                  onCustomerSelect={(c) => {
+                    setCustomerId(c._id)
+                    setCustomerPhone(c.phone)
+                    setCustomerEmail(c.email || "")
+                  }}
+                  placeholder="Type customer name..."
                 />
               </div>
               <div className="space-y-2">
@@ -229,11 +294,11 @@ export default function NewInvoicePage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  type="email"
+                <EmailInput
+                  id="customer-email"
+                  label="Email"
                   value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  onChange={setCustomerEmail}
                   placeholder="customer@example.com"
                 />
               </div>
@@ -261,7 +326,9 @@ export default function NewInvoicePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Labour Charges (₹)</label>
+                <Label className="text-sm font-medium">
+                  Labour Charges (₹)
+                </Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -273,7 +340,7 @@ export default function NewInvoicePage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Discount (₹)</label>
+                <Label className="text-sm font-medium">Discount (₹)</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -284,10 +351,23 @@ export default function NewInvoicePage() {
                   }}
                 />
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">GST Rate (%)</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={taxRate || ""}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, "")
+                    setTaxRate(val ? parseFloat(val) : 0)
+                  }}
+                  placeholder="e.g. 18"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Notes</label>
+              <Label className="text-sm font-medium">Notes</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -303,6 +383,8 @@ export default function NewInvoicePage() {
               servicesTotal={totals.servicesTotal}
               labourCharges={labourCharges}
               discount={discount}
+              tax={totals.tax}
+              taxRate={taxRate}
               total={totals.total}
             />
 

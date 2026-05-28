@@ -2,8 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
+import { EmailInput } from "@/components/email-input"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { CheckCircle2, Download } from "lucide-react"
+import { CheckCircle2, Download, Mail, Loader2, FileText } from "lucide-react"
 
 interface ActionInvoice {
   _id: string
@@ -21,6 +29,7 @@ interface ActionInvoice {
   services: Array<{ name: string; price: number }>
   subtotal: number
   tax?: number
+  taxRate?: number
   discount?: number
   labourCharges?: number
   total: number
@@ -75,6 +84,9 @@ export function InvoiceActions({
   onStatusChange,
 }: InvoiceActionsProps) {
   const [business, setBusiness] = useState<BusinessData | null>(null)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailInputOpen, setEmailInputOpen] = useState(false)
+  const [customEmail, setCustomEmail] = useState("")
 
   useEffect(() => {
     fetch("/api/business")
@@ -84,6 +96,21 @@ export function InvoiceActions({
       })
       .catch(() => {})
   }, [])
+
+  async function markAsCredit() {
+    try {
+      const res = await fetch(`/api/invoices/${invoice._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "credit" }),
+      })
+      if (!res.ok) throw new Error("Failed to update")
+      toast.success("Invoice marked as credit")
+      onStatusChange?.()
+    } catch {
+      toast.error("Failed to update invoice")
+    }
+  }
 
   async function markAsPaid() {
     try {
@@ -108,6 +135,37 @@ export function InvoiceActions({
       cancelled: "#dc2626",
     }
     return colors[status] || GRAY_600
+  }
+
+  async function handleSendEmail(to?: string) {
+    setSendingEmail(true)
+    try {
+      const body = to ? { customerEmail: to } : {}
+      const res = await fetch(`/api/invoices/${invoice._id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Failed to send")
+      }
+      toast.success("Invoice sent to " + (to || invoice.customerEmail))
+      setEmailInputOpen(false)
+      setCustomEmail("")
+    } catch (err) {
+      toast.error((err as Error).message || "Failed to send email")
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
+  function handleEmailClick() {
+    if (invoice.customerEmail) {
+      handleSendEmail()
+    } else {
+      setEmailInputOpen(true)
+    }
   }
 
   async function handleWhatsApp() {
@@ -407,6 +465,7 @@ View invoice: ${invoiceUrl}
                 <tr><td>Subtotal</td><td>${formatCurrency(invoice.subtotal)}</td></tr>
                 ${invoice.labourCharges ? `<tr><td>Labour Charges</td><td>${formatCurrency(invoice.labourCharges)}</td></tr>` : ""}
                 ${invoice.discount ? `<tr><td style="color:#dc2626">Discount</td><td style="color:#dc2626">-${formatCurrency(invoice.discount)}</td></tr>` : ""}
+                ${invoice.tax ? `<tr><td>GST${invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}</td><td>${formatCurrency(invoice.tax)}</td></tr>` : ""}
                 <tr class="grand-total"><td>Total</td><td>${formatCurrency(invoice.total)}</td></tr>
               </table>
             </div>
@@ -435,40 +494,105 @@ View invoice: ${invoiceUrl}
     printWindow.print()
   }
 
-  if (invoice.status === "paid") {
+  function renderEmailButton() {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={handleWhatsApp}>
-          <img
-            src="/whatsapp.svg"
-            height={300}
-            width={300}
-            className="h-4 w-4"
-          />
-          WhatsApp
-        </Button>
-        <Button size="sm" variant="outline" onClick={handleDownload}>
-          <Download className="h-4 w-4" />
-          PDF
-        </Button>
-      </div>
+      <Button size="sm" variant="outline" onClick={handleEmailClick}>
+        {sendingEmail ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Mail className="h-4 w-4" />
+        )}
+        {sendingEmail ? "Sending..." : "Email"}
+      </Button>
     )
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button size="sm" onClick={markAsPaid}>
-        <CheckCircle2 className="h-4 w-4" />
-        Mark as Paid
-      </Button>
-      <Button size="sm" variant="outline" onClick={handleWhatsApp}>
-        <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
-        WhatsApp
-      </Button>
-      <Button size="sm" variant="outline" onClick={handleDownload}>
-        <Download className="h-4 w-4" />
-        PDF
-      </Button>
-    </div>
+    <>
+      {invoice.status === "paid" ? (
+        <div className="flex flex-wrap gap-2">
+          {renderEmailButton()}
+          <Button size="sm" variant="outline" onClick={handleWhatsApp}>
+            <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
+            WhatsApp
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleDownload}>
+            <Download className="h-4 w-4" />
+            PDF
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {invoice.status !== "credit" && invoice.status !== "paid" && (
+            <Button size="sm" onClick={markAsCredit}>
+              <FileText className="h-4 w-4" />
+              Mark as Credit
+            </Button>
+          )}
+          {invoice.status !== "paid" && (
+            <Button size="sm" onClick={markAsPaid}>
+              <CheckCircle2 className="h-4 w-4" />
+              Mark as Paid
+            </Button>
+          )}
+          {renderEmailButton()}
+          <Button size="sm" variant="outline" onClick={handleWhatsApp}>
+            <img src="/whatsapp.svg" height={300} width={300} className="h-4 w-4" />
+            WhatsApp
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleDownload}>
+            <Download className="h-4 w-4" />
+            PDF
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={emailInputOpen} onOpenChange={setEmailInputOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogDescription>
+              This invoice has no email on file. Enter the customer&apos;s email
+              to send it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <EmailInput
+                id="actEmail"
+                label="Email Address"
+                value={customEmail}
+                onChange={setCustomEmail}
+                placeholder="customer@example.com"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setEmailInputOpen(false)
+                  setCustomEmail("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!customEmail.includes("@") || sendingEmail}
+                onClick={() => handleSendEmail(customEmail)}
+              >
+                {sendingEmail ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+                Send
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

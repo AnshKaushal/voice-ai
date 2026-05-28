@@ -27,7 +27,7 @@ export interface IInvoice extends Document {
   discount: number;
   labourCharges: number;
   total: number;
-  status: "draft" | "sent" | "paid" | "cancelled";
+  status: "draft" | "sent" | "paid" | "cancelled" | "credit";
   source: "voice" | "manual";
   rawTranscript?: string;
   notes?: string;
@@ -71,7 +71,7 @@ const InvoiceSchema = new Schema<IInvoice>(
     total: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ["draft", "sent", "paid", "cancelled"],
+      enum: ["draft", "sent", "paid", "cancelled", "credit"],
       default: "draft",
     },
     source: {

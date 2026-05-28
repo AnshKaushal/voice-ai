@@ -49,26 +49,48 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "month";
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
 
     await connectDB();
 
     const bizId = new mongoose.Types.ObjectId(businessId);
     const now = new Date();
     const periodStart = getPeriodRange(period, now);
-    const { dateFormat } = getGroupFormat(period);
+
+    let effectiveStart: Date;
+    let effectiveEnd: Date;
+    let effectiveFormat: string;
+
+    if (startDateParam && endDateParam) {
+      effectiveStart = new Date(startDateParam);
+      effectiveEnd = new Date(endDateParam);
+      effectiveEnd.setHours(23, 59, 59, 999);
+      const diffDays = Math.round((effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24));
+      effectiveFormat = diffDays <= 31 ? "%Y-%m-%d" : "%Y-%m";
+    } else {
+      effectiveStart = periodStart;
+      effectiveEnd = now;
+      effectiveFormat = getGroupFormat(period).dateFormat;
+    }
 
     const matchStage = {
       businessId: bizId,
-      createdAt: { $gte: periodStart, $lte: now },
+      createdAt: { $gte: effectiveStart, $lte: effectiveEnd },
     };
 
-    const [revenueByPeriod, serviceUsage, customerGrowth, statusBreakdown, topItems, summary, business] =
+    const revenueMatch = {
+      ...matchStage,
+      status: { $ne: "cancelled" },
+    };
+
+    const [revenueByPeriod, serviceUsage, customerGrowth, statusBreakdown, topItems, summary, business, creditInvoices] =
       await Promise.all([
         Invoice.aggregate([
-          { $match: matchStage },
+          { $match: revenueMatch },
           {
             $group: {
-              _id: { $dateToString: { format: dateFormat, date: "$createdAt" } },
+              _id: { $dateToString: { format: effectiveFormat, date: "$createdAt" } },
               revenue: { $sum: "$total" },
               count: { $sum: 1 },
             },
@@ -82,7 +104,7 @@ export async function GET(request: NextRequest) {
           { $unwind: "$services" },
           {
             $group: {
-              _id: "$services.name",
+              _id: { $toLower: { $trim: { input: "$services.name" } } },
               count: { $sum: 1 },
               revenue: { $sum: "$services.price" },
             },
@@ -93,10 +115,10 @@ export async function GET(request: NextRequest) {
         ]),
 
         Customer.aggregate([
-          { $match: { businessId: bizId, createdAt: { $gte: periodStart } } },
+          { $match: { businessId: bizId, createdAt: { $gte: effectiveStart } } },
           {
             $group: {
-              _id: { $dateToString: { format: dateFormat, date: "$createdAt" } },
+              _id: { $dateToString: { format: effectiveFormat, date: "$createdAt" } },
               newCustomers: { $sum: 1 },
             },
           },
@@ -132,7 +154,7 @@ export async function GET(request: NextRequest) {
         ]),
 
         Invoice.aggregate([
-          { $match: { businessId: bizId, createdAt: { $gte: periodStart } } },
+          { $match: { businessId: bizId, createdAt: { $gte: effectiveStart }, status: { $ne: "cancelled" } } },
           {
             $group: {
               _id: null,
@@ -146,6 +168,11 @@ export async function GET(request: NextRequest) {
         Business.findById(businessId)
           .select("subscription subscriptionStatus")
           .lean(),
+
+        Invoice.aggregate([
+          { $match: { businessId: bizId, createdAt: { $gte: effectiveStart }, status: "credit" } },
+          { $group: { _id: null, total: { $sum: "$total" } } },
+        ]),
       ]);
 
     // total customers
@@ -173,11 +200,12 @@ export async function GET(request: NextRequest) {
         totalInvoices: summary[0]?.totalInvoices || 0,
         totalCustomers,
         averageInvoiceValue: Math.round(summary[0]?.avgInvoiceValue || 0),
+        outstandingCredit: creditInvoices[0]?.total || 0,
       },
       meta: {
         period,
-        periodStart,
-        periodEnd: now,
+        periodStart: effectiveStart,
+        periodEnd: effectiveEnd,
         isPaid,
       },
     });

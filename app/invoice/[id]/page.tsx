@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useParams } from "next/navigation"
-import { Loader2, Printer } from "lucide-react"
+import { Loader2, Printer, Download } from "lucide-react"
 
 interface InvoiceItem {
   name: string
@@ -27,6 +27,8 @@ interface Invoice {
   subtotal: number
   discount: number
   labourCharges: number
+  tax: number
+  taxRate: number
   total: number
   status: string
   notes?: string
@@ -228,6 +230,7 @@ export default function SharedInvoicePage() {
                 <tr><td>Subtotal</td><td>${formatCurrency(invoice.subtotal)}</td></tr>
                 ${invoice.labourCharges ? `<tr><td>Labour Charges</td><td>${formatCurrency(invoice.labourCharges)}</td></tr>` : ""}
                 ${invoice.discount ? `<tr><td style="color:var(--destructive)">Discount</td><td style="color:var(--destructive)">-${formatCurrency(invoice.discount)}</td></tr>` : ""}
+                ${invoice.tax > 0 ? `<tr><td>GST${invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}</td><td>${formatCurrency(invoice.tax)}</td></tr>` : ""}
                 <tr class="grand-total"><td>Total</td><td>${formatCurrency(invoice.total)}</td></tr>
               </table>
             </div>
@@ -301,6 +304,7 @@ export default function SharedInvoicePage() {
     sent: "oklch(0.704 0.04 256.788)",
     draft: "#d97706",
     cancelled: "#dc2626",
+    credit: "#7c3aed",
   }
 
   return (
@@ -312,7 +316,41 @@ export default function SharedInvoicePage() {
       }}
     >
       <div style={{ maxWidth: "800px", margin: "0 auto", padding: "0 1rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+        <div
+          style={{
+            textAlign: "center",
+            marginBottom: "1.5rem",
+            display: "flex",
+            justifyContent: "center",
+            gap: "0.75rem",
+          }}
+        >
+          <button
+            onClick={() => window.print()}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              padding: "0.5rem 1rem",
+              fontSize: "0.875rem",
+              fontWeight: 500,
+              border: "1px solid oklch(0.704 0.04 256.788)",
+              background: "oklch(0.704 0.04 256.788)",
+              color: "#fff",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+            className="transition duration-300 rounded-3xl"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "oklch(0.6 0.04 256.788)"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "oklch(0.704 0.04 256.788)"
+            }}
+          >
+            <Printer style={{ height: "1rem", width: "1rem" }} />
+            Print
+          </button>
           <button
             onClick={handleDownload}
             style={{
@@ -328,7 +366,7 @@ export default function SharedInvoicePage() {
               cursor: "pointer",
               fontFamily: "inherit",
             }}
-            className="transition-all duration-300 rounded-lg"
+            className="transition duration-300 rounded-3xl"
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "oklch(0.9245 0.0138 92.9892)"
             }}
@@ -336,7 +374,7 @@ export default function SharedInvoicePage() {
               e.currentTarget.style.background = "transparent"
             }}
           >
-            <Printer style={{ height: "1rem", width: "1rem" }} />
+            <Download style={{ height: "1rem", width: "1rem" }} />
             Download PDF
           </button>
         </div>
@@ -757,6 +795,16 @@ export default function SharedInvoicePage() {
                       }}
                     >
                       -{formatCurrency(invoice.discount)}
+                    </td>
+                  </tr>
+                ) : null}
+                {invoice.tax > 0 ? (
+                  <tr>
+                    <td style={{ padding: "4px 0", border: "none" }}>
+                      GST{invoice.taxRate ? ` (${invoice.taxRate}%)` : ""}
+                    </td>
+                    <td style={{ padding: "4px 0", border: "none", textAlign: "right" }}>
+                      {formatCurrency(invoice.tax)}
                     </td>
                   </tr>
                 ) : null}

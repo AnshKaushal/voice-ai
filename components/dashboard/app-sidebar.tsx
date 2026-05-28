@@ -14,6 +14,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { AppLogo } from "@/components/app-logo"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -58,6 +59,7 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { setOpenMobile } = useSidebar()
   const { data: session } = useSession()
   const user = session?.user
   const initials = user?.name
@@ -70,15 +72,11 @@ export function AppSidebar() {
     : user?.email?.charAt(0).toUpperCase() || "U"
 
   return (
-    <Sidebar collapsible="offcanvas" variant="sidebar">
+    <Sidebar collapsible="offcanvas" variant="inset">
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="hover:bg-transparent">
-              <Link href="/dashboard">
-                <AppLogo />
-              </Link>
-            </SidebarMenuButton>
+          <SidebarMenuItem className="w-fit p-2">
+            <AppLogo href="/" />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
@@ -94,6 +92,7 @@ export function AppSidebar() {
                       asChild
                       isActive={pathname === item.href}
                       tooltip={item.title}
+                      onClick={() => setOpenMobile(false)}
                     >
                       <Link href={item.href}>
                         <item.icon className="size-4" />

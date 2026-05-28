@@ -4,19 +4,19 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
-export function isValidPhone(phone: string): boolean {
-  return phone.length === 10 && /^[6-9]/.test(phone)
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-export function getPhoneError(phone: string): string | null {
-  const digits = phone.replace(/\D/g, "")
-  if (digits.length === 0) return null
-  if (digits.length < 10) return "Must be exactly 10 digits"
-  if (!/^[6-9]/.test(digits)) return "Must start with 6, 7, 8, or 9"
+export function getEmailError(email: string): string | null {
+  if (email.length === 0) return null
+  if (!email.includes("@")) return "Must contain @"
+  if (!email.includes(".")) return "Must contain a domain"
+  if (!isValidEmail(email)) return "Invalid email format"
   return null
 }
 
-export function PhoneInput({
+export function EmailInput({
   value,
   onChange,
   id,
@@ -31,7 +31,7 @@ export function PhoneInput({
   placeholder?: string
   disabled?: boolean
 }) {
-  const error = getPhoneError(value)
+  const error = getEmailError(value)
   const isValid = value.length > 0 && !error
 
   return (
@@ -43,13 +43,10 @@ export function PhoneInput({
       )}
       <Input
         id={id}
-        type="text"
-        inputMode="numeric"
+        type="email"
         value={value}
-        onChange={(e) =>
-          onChange(e.target.value.replace(/\D/g, "").slice(0, 10))
-        }
-        placeholder={placeholder || "10-digit phone number"}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || "customer@example.com"}
         disabled={disabled}
         className={cn(
           error && "focus:border-red-500 focus-visible:ring-red-500",

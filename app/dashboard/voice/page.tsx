@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,15 +10,16 @@ import { Separator } from "@/components/ui/separator"
 import { VoiceRecorder } from "@/components/voice/voice-recorder"
 import { toast } from "sonner"
 import { InvoiceActions } from "@/components/invoice-actions"
-import { InvoiceItemsTable, InvoiceServicesTable, InvoiceTotals } from "@/components/invoice-table"
-import { PhoneInput } from "@/components/phone-input"
 import {
-  FileText,
-  Save,
-  Loader2,
-  Wand2,
-  CheckCircle2,
-} from "lucide-react"
+  InvoiceItemsTable,
+  InvoiceServicesTable,
+  InvoiceTotals,
+} from "@/components/invoice-table"
+import { PhoneInput } from "@/components/phone-input"
+import { EmailInput } from "@/components/email-input"
+import { CustomerCombobox } from "@/components/customer-combobox"
+import { FileText, Save, Loader2, Wand2, CheckCircle2 } from "lucide-react"
+import { Label } from "@/components/ui/label"
 
 interface InvoiceItem {
   name: string
@@ -34,10 +35,12 @@ interface InvoiceService {
 interface ParsedData {
   customerName?: string
   customerPhone?: string
+  customerEmail?: string
   items: InvoiceItem[]
   services: InvoiceService[]
   labourCharges?: number
   discount?: number
+  taxRate?: number
   notes?: string
 }
 
@@ -50,6 +53,7 @@ function calculateTotal(
   services: InvoiceService[],
   labour: number,
   discount: number,
+  taxRate: number,
 ) {
   const itemsTotal = items.reduce(
     (s, i) => s + calcItemTotal(i.quantity, i.price),
@@ -57,11 +61,13 @@ function calculateTotal(
   )
   const servicesTotal = services.reduce((s, sv) => s + (sv.price || 0), 0)
   const subtotal = itemsTotal + servicesTotal + (labour || 0)
+  const tax = (subtotal * (taxRate || 0)) / 100
   return {
     itemsTotal,
     servicesTotal,
     subtotal: Math.round(subtotal * 100) / 100,
-    total: Math.round((subtotal - (discount || 0)) * 100) / 100,
+    tax: Math.round(tax * 100) / 100,
+    total: Math.round((subtotal + tax - (discount || 0)) * 100) / 100,
   }
 }
 
@@ -79,10 +85,24 @@ export default function VoicePage() {
     services: [],
     customerName: "",
     customerPhone: "",
+    customerEmail: "",
     labourCharges: 0,
     discount: 0,
+    taxRate: 0,
     notes: "",
   })
+  const [customerId, setCustomerId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/business")
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error && data.defaultTaxRate) {
+          setEditable((prev) => ({ ...prev, taxRate: data.defaultTaxRate }))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const handleVoiceResult = (text: string, parsed: ParsedData) => {
     setLiveTranscript("")
@@ -90,10 +110,12 @@ export default function VoicePage() {
     setEditable((prev) => ({
       customerName: parsed.customerName || prev.customerName || "",
       customerPhone: parsed.customerPhone || prev.customerPhone || "",
+      customerEmail: parsed.customerEmail || prev.customerEmail || "",
       items: [...prev.items, ...(parsed.items || [])],
       services: [...prev.services, ...(parsed.services || [])],
       labourCharges: parsed.labourCharges || prev.labourCharges || 0,
       discount: parsed.discount || prev.discount || 0,
+      taxRate: parsed.taxRate || prev.taxRate || 0,
       notes: parsed.notes || prev.notes || "",
     }))
     setTranscript((prev) => (prev ? `${prev}\n${text}` : text))
@@ -158,7 +180,16 @@ export default function VoicePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...editable,
+          customerName: editable.customerName,
+          customerPhone: editable.customerPhone,
+          customerEmail: editable.customerEmail,
+          items: editable.items,
+          services: editable.services,
+          labourCharges: editable.labourCharges,
+          discount: editable.discount,
+          ...(editable.taxRate ? { taxRate: editable.taxRate } : {}),
+          notes: editable.notes,
+          customerId,
           rawTranscript: transcript,
           source: "voice",
         }),
@@ -182,13 +213,16 @@ export default function VoicePage() {
     setLiveTranscript("")
     setParsedData(null)
     setCreatedInvoice(null)
+    setCustomerId(null)
     setEditable({
       items: [],
       services: [],
       customerName: "",
       customerPhone: "",
+      customerEmail: "",
       labourCharges: 0,
       discount: 0,
+      taxRate: 0,
       notes: "",
     })
   }
@@ -198,6 +232,7 @@ export default function VoicePage() {
     editable.services,
     editable.labourCharges || 0,
     editable.discount || 0,
+    editable.taxRate || 0,
   )
 
   if (createdInvoice) {
@@ -217,12 +252,17 @@ export default function VoicePage() {
               <div>
                 <p className="font-medium">Invoice Created</p>
                 <p className="text-sm text-muted-foreground">
-                  {(createdInvoice as Record<string, string>).invoiceNumber || "New Invoice"}
+                  {(createdInvoice as Record<string, string>).invoiceNumber ||
+                    "New Invoice"}
                 </p>
               </div>
             </div>
             <InvoiceActions
-              invoice={createdInvoice as unknown as Parameters<typeof InvoiceActions>[0]["invoice"]}
+              invoice={
+                createdInvoice as unknown as Parameters<
+                  typeof InvoiceActions
+                >[0]["invoice"]
+              }
               onStatusChange={() =>
                 setCreatedInvoice((prev) =>
                   prev ? { ...prev, status: "paid" } : prev,
@@ -235,9 +275,7 @@ export default function VoicePage() {
                 New Invoice
               </Button>
               <Button variant="outline" className="flex-1" asChild>
-                <Link href="/dashboard/invoices">
-                  All Invoices
-                </Link>
+                <Link href="/dashboard/invoices">All Invoices</Link>
               </Button>
             </div>
           </CardContent>
@@ -283,7 +321,9 @@ export default function VoicePage() {
                 <Wand2 className="h-4 w-4 text-primary" />
                 <span className="text-sm font-medium">Transcript</span>
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{transcript}</p>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {transcript}
+              </p>
             </div>
           )}
         </CardContent>
@@ -298,23 +338,33 @@ export default function VoicePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Customer Name</label>
-                <Input
-                  value={editable.customerName}
-                  onChange={(e) =>
+                <CustomerCombobox
+                  id="voice-customer-name"
+                  label="Customer Name"
+                  value={editable.customerName || ""}
+                  onChange={(v) => {
+                    setEditable((prev) => ({ ...prev, customerName: v }))
+                    if (v === "") {
+                      setCustomerId(null)
+                      setEditable((prev) => ({ ...prev, customerPhone: "", customerEmail: "" }))
+                    }
+                  }}
+                  onCustomerSelect={(c) => {
+                    setCustomerId(c._id)
                     setEditable((prev) => ({
                       ...prev,
-                      customerName: e.target.value,
+                      customerPhone: c.phone,
+                      customerEmail: c.email || "",
                     }))
-                  }
-                  placeholder="Customer name"
+                  }}
+                  placeholder="Type customer name..."
                 />
               </div>
               <div className="space-y-2">
                 <PhoneInput
-                  id="customer-phone"
+                  id="voice-customer-phone"
                   label="Phone"
                   value={editable.customerPhone || ""}
                   onChange={(v) =>
@@ -324,6 +374,20 @@ export default function VoicePage() {
                     }))
                   }
                   placeholder="Phone number"
+                />
+              </div>
+              <div className="space-y-2">
+                <EmailInput
+                  id="voice-customer-email"
+                  label="Email"
+                  value={editable.customerEmail || ""}
+                  onChange={(v) =>
+                    setEditable((prev) => ({
+                      ...prev,
+                      customerEmail: v,
+                    }))
+                  }
+                  placeholder="customer@example.com"
                 />
               </div>
             </div>
@@ -350,9 +414,9 @@ export default function VoicePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">
+                <Label className="text-sm font-medium">
                   Labour Charges (₹)
-                </label>
+                </Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -367,7 +431,7 @@ export default function VoicePage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Discount (₹)</label>
+                <Label className="text-sm font-medium">Discount (₹)</Label>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -381,10 +445,26 @@ export default function VoicePage() {
                   }}
                 />
               </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">GST Rate (%)</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={editable.taxRate || ""}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, "")
+                    setEditable((prev) => ({
+                      ...prev,
+                      taxRate: val ? parseFloat(val) : 0,
+                    }))
+                  }}
+                  placeholder="e.g. 18"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Notes</label>
+              <Label className="text-sm font-medium">Notes</Label>
               <Textarea
                 value={editable.notes}
                 onChange={(e) =>
@@ -402,6 +482,8 @@ export default function VoicePage() {
               servicesTotal={totals.servicesTotal}
               labourCharges={editable.labourCharges || 0}
               discount={editable.discount || 0}
+              tax={totals.tax}
+              taxRate={editable.taxRate || 0}
               total={totals.total}
             />
 

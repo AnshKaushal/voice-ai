@@ -5,14 +5,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 ## Goal
-- Build a cross-platform invoice sharing system (WhatsApp, email, public link) with identical light‑theme branding across all outputs (PDF, HTML print, public page, email attachment).
+Build and improve an AI‑powered voice‑first invoicing SaaS with cross‑platform sharing, dark‑mode‑immune public pages, responsive tables, GST support, masonry layout, and refined dashboard UX.
 
 ## Constraints & Preferences
-- All invoice outputs must use the exact same light‑theme colors (oklch values from globals.css `:root`), never dark mode.
-- wa.me URLs cannot attach files; WhatsApp sharing must fall back to a public invoice link.
-- The email send route generates a server‑side jsPDF and sends it as an attachment with a professional HTML template.
-- The public page `/invoice/[id]` must render the invoice in light theme only and provide a "Download PDF" button that produces output identical to the dashboard print/download.
-- No business details (name, address, phone, email, GSTIN) were showing in the invoice detail page's print/download — now fetched from `/api/business`.
+- All invoice outputs use the exact same light‑theme colors (oklch values from globals.css `:root`), never dark mode.
+- wa.me URLs cannot attach files; WhatsApp sharing falls back to a public invoice link.
+- The email send route generates a server‑side jsPDF and sends it as an attachment with a branded HTML template; accepts custom `customerEmail` in request body.
+- The public page `/invoice/[id]` renders invoice in light theme only with Print and Download PDF buttons.
+- Business details (name, address, phone, email, GSTIN) are fetched from `/api/business` for all print/PDF/email outputs.
+- Phone input validation borders (green/red) appear only while focused.
+- The dashboard uses CSS columns for masonry layout — cards take natural height, no stretching.
+- GST is optional (defaults to 0%) via per-invoice `taxRate` or Business-level `defaultTaxRate` from settings.
+- Data export supports JSON, CSV, and TXT formats with a format selector in settings.
+- Email inputs have green/red validation borders only while focused (like PhoneInput).
+- Customer name field on invoice creation has autocomplete dropdown that searches existing customers and auto-fills phone/email.
+- Analytics page uses a date range picker; free/trial users are restricted to last 7 days only with locked period options.
 
 ## Progress
 ### Done
@@ -64,6 +71,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Upgraded the email send API (`app/api/invoices/[id]/send/route.ts`) with a professional branded HTML template and a fully styled jsPDF attachment (watermark, blue accent bars, BILL TO table, totals block, etc.).
 - Replaced all dynamic `getComputedStyle` reads in `handleDownload` with hardcoded light‑theme `:root` oklch values so the print PDF is always light‑theme regardless of the user's current mode.
 
+### Done (masonry dashboard + global GST + email dialogs + export + phone border fix)
+- **Phone input validation borders only on focus**: Changed `border-red-500`/`border-green-500` to `focus:border-red-500`/`focus:border-green-500` in `components/phone-input.tsx` so colored borders appear only while the input is focused.
+- **Global default tax rate**: Added `defaultTaxRate: Number` to `Business` model (`lib/models/business.ts`), accepted in `PUT /api/business/route.ts`, added UI input in settings page (`app/dashboard/settings/page.tsx`), and invoice creation API (`POST /api/invoices/route.ts`) uses `business.defaultTaxRate` when `taxRate` is not explicitly provided.
+- **Data export with format selector**: `GET /api/export` now accepts `?format=json|csv|txt`. CSV flattens all records, TXT outputs formatted tables with columns. Settings page shows a `Select` dropdown (JSON/CSV/TXT) before the Export button.
+- **Email button with confirmation/input dialog (invoice detail page)**: `app/dashboard/invoices/[id]/page.tsx` now shows "Send Email" always. If `customerEmail` exists, a `ConfirmDialog` asks for confirmation before sending. If no email on file, a `Dialog` with an email input appears; user enters an email and it's passed as `customerEmail` in the API request body.
+- **Email button in InvoiceActions (voice entry)**: `components/invoice-actions.tsx` now has a "Send Email" button that either sends directly (if `customerEmail` exists) or opens an email input `Dialog`. Added `Mail` icon, `Loader2` spinner, and the same email input UI. Works on both `paid` and non-paid states.
+- **Masonry dashboard**: Replaced CSS `grid` charts section and bottom section with `columns-1 md:columns-2` + `break-inside-avoid` on each card, so cards flow naturally in columns without stretching to equal height.
+
+### Done (email validation + customer autocomplete + analytics date range + terms + combobox + customer detail + upgrade dialog + analytics gating)
+- **Email validation**: Created `components/email-input.tsx` with `isValidEmail()`, `getEmailError()`, and green/red `focus:` borders (same pattern as PhoneInput). Replaced raw `<Input type="email">` in invoice creation forms (both manual + voice), invoice detail email dialog, InvoiceActions email dialog, and settings page.
+- **Customer autocomplete**: Created `components/customer-autocomplete.tsx` — debounced search against `/api/customers?search=`, dropdown shows matching customers with phone/email, selection auto-fills all fields and passes `customerId` to the invoice creation API (`POST /api/invoices` accepts `customerId`). Integrated in both manual and voice invoice creation pages.
+- **Analytics date range + paid gating**: Created `components/date-range-picker.tsx` (Calendar + Popover) and `components/ui/popover.tsx`. Updated analytics API (`GET /api/analytics`) to accept `startDate`/`endDate` params. Updated analytics page: free users see only "Last 7 days" in period selector (others show lock icon + disabled), date range picker also locked for free users. Premium features (top items, revenue by status) retain existing `PaidOverlay` blur.
+- **Terms checkbox in onboarding**: Added `Checkbox` + terms link to onboarding step 2 (business info), `acceptedTerms` validated client-side (blocks proceeding) and server-side (400 if false/missing). Created `app/terms-and-conditions/page.tsx` as a dummy placeholder page.
+- **Combobox customer search**: Created `components/customer-combobox.tsx` using `@base-ui/react` Combobox. Replaced `CustomerAutocomplete` in both manual and voice invoice forms with the combobox, which fetches customers via API and allows keyboard-navigable search with auto-fill.
+- **Customer detail page**: Created `app/dashboard/customers/[id]/page.tsx` and `app/api/customers/[id]/route.ts`. Shows customer info, total spent, visit count, most purchased items (pro-gated), retention rate (pro-gated), visit history (pro-gated), and full invoice list. Cards in customers list are now clickable Links.
+- **Upgrade dialog + lock UX**: Created `components/upgrade-dialog.tsx` — Dialog triggered when free users click locked periods/features. Dashboard and analytics period selectors now use `isPaid` to gate non-week options; clicking locked options opens the upgrade dialog instead of selecting the period. Lock icons displayed on gated items.
+- **Subscription cards analytics info**: Updated Starter plan features in settings to include `Basic analytics (7-day view)`.
+- **Dashboard analytics gating**: Dashboard period selector now respects `isPaid` — non-paid users see lock icons on month/quarter/year options and cannot select them. If a non-paid user clicks a locked option, `UpgradeDialog` opens.
+
 ### In Progress
 - (none)
 
@@ -81,6 +107,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Subscription activation on callback**: Verify endpoint fetches subscription status from Razorpay and updates DB directly when user returns from checkout — bypasses webhook (which can't reach localhost).
 - **Logo hydration safety**: `AppLogo` renders empty spacer during SSR, swaps in theme-aware image only after client mount — prevents hydration mismatch.
 - **30-day free trial**: Onboarding sets trialStart/trialEnd. Voice parse checks credits > 0. Dashboard shows trial banner. Settings page has upgrade via Razorpay Checkout modal.
+- **Email dialog patterns**: Two patterns in the codebase — `ConfirmDialog` when the invoice already has a customer email (for confirmation), and a custom `Dialog` with an email `Input` when the customer email is missing.
+- **Masonry via CSS columns**: Dashboard uses `columns-1 md:columns-2` + `break-inside-avoid` instead of CSS grid to prevent card stretching.
+- **Global GST fallback**: Invoice creation uses `"taxRate" in body ? body.taxRate : business.defaultTaxRate ?? 0` — forms omit `taxRate` when 0 so default applies.
+- **Combobox from @base-ui/react**: Uses `Combobox` with object values `{ _id, name, phone, email }`, `itemToStringLabel` for display, external API fetch on debounced search.
+- **UpgradeDialog**: Reusable `Dialog` triggered when free users click locked features; links to `/dashboard/settings`.
+- **Customer analytics gating**: Most purchased items, retention rate, and visit history are gated behind `isPaid` on customer detail page; basic info always visible.
 
 ## Next Steps
 1. Verify the WhatsApp shared link opens the public page in light theme on all devices.
@@ -88,6 +120,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 3. Configure Google OAuth credentials in `.env.local` (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
 4. Test full auth flow end-to-end: register → OTP → onboarding → dashboard
 5. Test Google OAuth flow: sign-in → onboarding (2 steps) → dashboard
+6. Test customer combobox on both manual and voice invoice forms
+7. Verify customer detail page loads all data correctly
+8. Test upgrade dialog on dashboard and analytics pages for free users
 
 ## Critical Context
 - Build compiles with 27 routes + proxy (verified `npm run build` succeeds)
@@ -103,6 +138,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - InvoiceActions fetches business data from `/api/business` on mount — business details appear in both jspdf (WhatsApp) and HTML print (PDF download) versions
 - `proxy.ts` middleware protects only `/dashboard` and `/onboarding`; `/invoice/[id]` and `/api/share/[id]` pass through without auth
 - `:root` light‑theme oklch values: `--primary: oklch(0.704 0.04 256.788)`, `--background: oklch(0.9818 0.0054 95.0986)`, `--foreground: oklch(0.145 0 0)`, `--muted: oklch(0.923 0.003 48.717)`, `--muted-foreground: oklch(0.553 0.013 58.071)`, `--border: oklch(0.869 0.005 56.366)`, `--destructive: oklch(0.6368 0.2078 25.3313)`
+- Send email API now accepts `customerEmail` in request body for custom recipient
+- `app/api/invoices/[id]/send/route.ts` uses `recipient` variable (body.customerEmail || invoice.customerEmail)
+- `calculateTotals(items, services, labourCharges, discount, taxRate)` formula: `tax = subtotal * taxRate / 100`, `total = subtotal + tax + labourCharges - discount`
+- Business model has `defaultTaxRate` field (Number, default 0)
+- `components/email-input.tsx` mirrors `phone-input.tsx` with `isValidEmail()` / `getEmailError()` and focus‑only borders
+- `components/customer-autocomplete.tsx` does debounced search (300ms) against `/api/customers?search=&limit=8`, passes `customerId` to invoice creation
+- `components/date-range-picker.tsx` wraps `Calendar` + `Popover`; analytics page disables non‑week periods for free users via `disabled` + lock icon
+- `components/ui/popover.tsx` is the shadcn popover component using `@radix-ui/react-popover`
 ## Relevant Files
 - `lib/auth.ts`: NextAuth v5 config — JWT callback handles explicit updateSession data
 - `proxy.ts`: Route protection — blocks unauthenticated, enforces onboarding
@@ -124,12 +167,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `components/confirm-dialog.tsx`: Reusable shadcn AlertDialog for confirmations
 - `components/bulk-upload-dialog.tsx`: Drag-drop CSV/JSON/TXT bulk upload with preview
 - `scripts/seed-razorpay-plans.ts`: Creates Starter and Pro plans in Razorpay
-- `app/dashboard/settings/page.tsx`: Subscription with Checkout modal, personal details, callback success handling
-- `app/dashboard/analytics/page.tsx`: Detailed analytics with recharts, paid-plan gated features (top items, revenue by status)
-- `app/api/analytics/route.ts`: Analytics API — revenue by period, service usage, customer growth, status breakdown, top items, premium gating
+- `app/dashboard/settings/page.tsx`: Subscription with Checkout modal, personal details, callback success handling, export format selector, default GST rate input
+- `app/dashboard/analytics/page.tsx`: Detailed analytics with recharts, paid-plan gated features (top items, revenue by status), date range picker, locked periods for free users
+- `app/api/analytics/route.ts`: Analytics API — revenue by period, service usage, customer growth, status breakdown, top items, premium gating, accepts `startDate`/`endDate` params
 - `components/invoice-table.tsx`: Reusable InvoiceItemsTable, InvoiceServicesTable, InvoiceTotals components for tabular invoice editing
 - `app/globals.css`: `--radius: 0` for zero rounded corners; defines `:root` oklch light‑theme values used across all PDF/print/public outputs
 - `app/invoice/[id]/page.tsx`: Public invoice page — hardcoded oklch colors, plain `<button>`, `handleDownload` shares HTML template with dashboard
 - `app/api/share/[id]/route.ts`: Public API returning invoice + business data (no auth)
-- `app/api/invoices/[id]/send/route.ts`: Email send API with branded HTML template + styled jsPDF attachment
+- `app/api/invoices/[id]/send/route.ts`: Email send API with branded HTML template + styled jsPDF attachment, accepts optional `customerEmail` in body
 - `tsconfig.json`: excludes `["node_modules", "scripts"]`
+- `components/invoice-actions.tsx`: Now includes email send button with Mail dialog for missing emails
+- `app/dashboard/invoices/[id]/page.tsx`: Now has email button with ConfirmDialog (email exists) or email Input dialog (no email)
+- `app/api/export/route.ts`: GET with `?format=json|csv|txt` support
+- `app/dashboard/page.tsx`: Dashboard with CSS columns masonry layout for charts and bottom section
+- `components/phone-input.tsx`: Green/red border only while focused (`focus:border-*`)
+- `components/email-input.tsx`: Email input with validation and focus-only borders (same pattern as PhoneInput)
+- `components/customer-autocomplete.tsx`: Debounced customer search dropdown that auto-fills phone/email and passes customerId to invoice creation
+- `components/customer-combobox.tsx`: Combobox search using @base-ui/react — replaces CustomerAutocomplete
+- `components/date-range-picker.tsx`: Calendar + Popover date range picker for analytics
+- `components/ui/popover.tsx`: shadcn Popover component using `@radix-ui/react-popover`
+- `components/upgrade-dialog.tsx`: Dialog triggered when free users click locked features
+- `app/dashboard/customers/[id]/page.tsx`: Customer detail page with info + pro-gated analytics
+- `app/api/customers/[id]/route.ts`: Customer detail API with invoices and analytics computation

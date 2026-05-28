@@ -39,20 +39,11 @@ export function Hero() {
             </Button>
           </div>
           <div className="mt-12 text-sm text-muted-foreground flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-4">
-            <span className="inline-flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-              No credit card required
-            </span>
+            <span>No credit card required</span>
             <span className="hidden sm:inline">·</span>
-            <span className="inline-flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-              50 free transcriptions
-            </span>
+            <span>50 free transcriptions</span>
             <span className="hidden sm:inline">·</span>
-            <span className="inline-flex items-center gap-1">
-              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-              Works on any device
-            </span>
+            <span>Works on any device</span>
           </div>
         </div>
       </div>
