@@ -12,6 +12,9 @@ export interface IBusiness extends Document {
   subscription: "free" | "starter" | "pro";
   subscriptionStatus: "trialing" | "active" | "cancelled" | "expired" | "past_due";
   razorpaySubscriptionId?: string;
+  pendingPlan?: "free" | "starter" | "pro" | null;
+  pendingPlanEffectiveDate?: Date | null;
+  remindersSent?: number[];
   trialStart?: Date;
   trialEnd?: Date;
   createdAt: Date;
@@ -43,6 +46,9 @@ const BusinessSchema = new Schema<IBusiness>(
       default: "trialing",
     },
     razorpaySubscriptionId: { type: String, default: "" },
+    pendingPlan: { type: String, enum: ["free", "starter", "pro", null], default: null },
+    pendingPlanEffectiveDate: { type: Date, default: null },
+    remindersSent: { type: [Number], default: [] },
     trialStart: { type: Date },
     trialEnd: { type: Date },
   },

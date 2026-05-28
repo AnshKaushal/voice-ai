@@ -24,3 +24,11 @@ export async function createPaymentOrder(amount: number, receipt: string) {
     receipt,
   })
 }
+
+export async function cancelSubscription(subscriptionId: string, cancelAtCycleEnd: boolean = false) {
+  return razorpay.subscriptions.cancel(subscriptionId, cancelAtCycleEnd)
+}
+
+export async function getSubscription(subscriptionId: string) {
+  return razorpay.subscriptions.fetch(subscriptionId)
+}

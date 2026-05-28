@@ -1,11 +1,12 @@
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ShieldCheck } from "lucide-react";
-import { auth } from "@/lib/auth";
-import { connectDB } from "@/lib/mongodb";
-import { Business } from "@/lib/models/business";
+import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { CheckCircle2, ShieldCheck } from "lucide-react"
+import { auth } from "@/lib/auth"
+import { connectDB } from "@/lib/mongodb"
+import { Business } from "@/lib/models/business"
+import { SwitchPlanDialog } from "@/components/switch-plan-dialog"
 
 const plans = [
   {
@@ -55,24 +56,40 @@ const plans = [
     cta: "Start Free Trial",
     popular: false,
   },
-];
+]
 
 export async function Pricing() {
-  const session = await auth();
-  let currentPlan: string | null = null;
+  const session = await auth()
+  let currentPlan: string | null = null
+  let pendingPlanName: string | null = null
 
-  const businessId = session?.user ? (session.user as unknown as Record<string, unknown>).businessId as string | null : null;
+  const businessId = session?.user
+    ? ((session.user as unknown as Record<string, unknown>).businessId as
+        | string
+        | null)
+    : null
   if (session?.user && businessId) {
-    await connectDB();
-    const business = await Business.findById(businessId).select("subscription subscriptionStatus").lean();
-    if (business && business.subscriptionStatus === "active") {
-      if (business.subscription === "starter") currentPlan = "Starter";
-      else if (business.subscription === "pro") currentPlan = "Pro";
+    await connectDB()
+    const business = await Business.findById(businessId)
+      .select("subscription subscriptionStatus pendingPlan")
+      .lean()
+    if (business?.pendingPlan) {
+      pendingPlanName = business.pendingPlan === "starter" ? "Starter" : "Free"
+      // Current plan is still the active one
+      if (business.subscriptionStatus === "active") {
+        if (business.subscription === "starter") currentPlan = "Starter"
+        else if (business.subscription === "pro") currentPlan = "Pro"
+      } else {
+        currentPlan = "Free"
+      }
+    } else if (business && business.subscriptionStatus === "active") {
+      if (business.subscription === "starter") currentPlan = "Starter"
+      else if (business.subscription === "pro") currentPlan = "Pro"
     } else {
-      currentPlan = "Free";
+      currentPlan = "Free"
     }
   } else if (session?.user) {
-    currentPlan = "Free";
+    currentPlan = "Free"
   }
 
   return (
@@ -92,30 +109,47 @@ export async function Pricing() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {plans.map((plan) => {
             const isCurrentPlan = currentPlan === plan.name;
+            const isPendingPlan = pendingPlanName === plan.name;
             const isPaidUser = currentPlan === "Starter" || currentPlan === "Pro";
-            const isFreePlanOnPaid = plan.name === "Free" && isPaidUser;
+            const isFreePlanOnPaid = plan.name === "Free" && isPaidUser && !isPendingPlan;
             return (
               <Card
                 key={plan.name}
-                className={`relative ${plan.popular && !isCurrentPlan ? "border-primary shadow-lg" : isCurrentPlan ? "border-green-500 shadow-lg" : "border-0 bg-background"}`}
+                className={`relative ${plan.popular && !isCurrentPlan && !isPendingPlan ? "border-primary shadow-lg" : isCurrentPlan && !isPendingPlan ? "border-green-500 shadow-lg" : isPendingPlan ? "border-amber-500 shadow-lg" : "border-0 bg-background"}`}
               >
-                {plan.popular && !isCurrentPlan && (
+                {plan.popular && !isCurrentPlan && !isPendingPlan && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge>Most Popular</Badge>
                   </div>
                 )}
-                {isCurrentPlan && (
+                {isCurrentPlan && !isPendingPlan && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                     <Badge className="bg-green-500 hover:bg-green-600">Current Plan</Badge>
                   </div>
                 )}
+                {isPendingPlan && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-amber-500 hover:bg-amber-600">Scheduled</Badge>
+                  </div>
+                )}
+                {isCurrentPlan && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-green-500 hover:bg-green-600">
+                      Current Plan
+                    </Badge>
+                  </div>
+                )}
                 <CardContent className="p-6 pt-8">
                   <h3 className="font-semibold text-lg mb-1">{plan.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {plan.description}
+                  </p>
                   <div className="mb-6">
                     <span className="text-4xl font-bold">{plan.price}</span>
                     {plan.period && (
-                      <span className="text-muted-foreground ml-1">{plan.period}</span>
+                      <span className="text-muted-foreground ml-1">
+                        {plan.period}
+                      </span>
                     )}
                   </div>
                   <ul className="space-y-3 mb-8">
@@ -126,32 +160,45 @@ export async function Pricing() {
                       </li>
                     ))}
                   </ul>
-                  {isCurrentPlan ? (
+                  {isCurrentPlan && !isPendingPlan ? (
                     <Button className="w-full" variant="outline" disabled>
                       <ShieldCheck className="h-4 w-4 mr-2" />
                       Current Plan
+                    </Button>
+                  ) : isPendingPlan ? (
+                    <Button className="w-full" variant="outline" disabled>
+                      Scheduled
                     </Button>
                   ) : isFreePlanOnPaid ? (
                     <Button className="w-full" variant="outline" disabled>
                       No longer available
                     </Button>
+                  ) : session ? (
+                    <SwitchPlanDialog planName={plan.name} planPrice={`${plan.price}${plan.period}`}>
+                      <Button
+                        className="w-full"
+                        variant={plan.popular ? "default" : "outline"}
+                      >
+                        Switch Plan
+                      </Button>
+                    </SwitchPlanDialog>
                   ) : (
                     <Button
                       className="w-full"
                       variant={plan.popular ? "default" : "outline"}
                       asChild
                     >
-                      <Link href={session ? "/dashboard/settings" : "/register"}>
-                        {session ? "Switch Plan" : plan.cta}
+                      <Link href="/register">
+                        {plan.cta}
                       </Link>
                     </Button>
                   )}
                 </CardContent>
               </Card>
-            );
+            )
           })}
         </div>
       </div>
     </section>
-  );
+  )
 }

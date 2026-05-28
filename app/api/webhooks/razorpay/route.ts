@@ -36,20 +36,46 @@ export async function POST(request: NextRequest) {
     if (event === "subscription.cancelled") {
       const subscriptionId = payload.subscription?.entity?.id;
       if (subscriptionId) {
-        await Business.findOneAndUpdate(
-          { razorpaySubscriptionId: subscriptionId },
-          { subscriptionStatus: "cancelled" }
-        );
+        const business = await Business.findOne({ razorpaySubscriptionId: subscriptionId });
+        if (business) {
+          if (business.pendingPlan) {
+            // Apply pending downgrade
+            business.subscription = business.pendingPlan;
+            business.subscriptionStatus = "cancelled";
+            business.credits = business.pendingPlan === "starter" ? 100 : 0;
+            business.razorpaySubscriptionId = "";
+            business.pendingPlan = null;
+            business.pendingPlanEffectiveDate = null;
+          } else {
+            // Regular cancellation (no pending plan)
+            business.subscriptionStatus = "cancelled";
+            business.credits = 0;
+            business.razorpaySubscriptionId = "";
+          }
+          await business.save();
+        }
       }
     }
 
     if (event === "subscription.completed") {
       const subscriptionId = payload.subscription?.entity?.id;
       if (subscriptionId) {
-        await Business.findOneAndUpdate(
-          { razorpaySubscriptionId: subscriptionId },
-          { subscriptionStatus: "expired", credits: 0 }
-        );
+        const business = await Business.findOne({ razorpaySubscriptionId: subscriptionId });
+        if (business) {
+          if (business.pendingPlan) {
+            business.subscription = business.pendingPlan;
+            business.subscriptionStatus = "expired";
+            business.credits = business.pendingPlan === "starter" ? 100 : 0;
+            business.razorpaySubscriptionId = "";
+            business.pendingPlan = null;
+            business.pendingPlanEffectiveDate = null;
+          } else {
+            business.subscriptionStatus = "expired";
+            business.credits = 0;
+            business.razorpaySubscriptionId = "";
+          }
+          await business.save();
+        }
       }
     }
 

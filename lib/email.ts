@@ -82,12 +82,54 @@ export async function sendWelcomeEmail(email: string, name: string) {
         </div>
 
         <div style="text-align: center;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://bolkebill.in"}/dashboard/voice" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600;">Go to Voice Entry</a>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || "https://bolkebill.anshkaushal.in"}/dashboard/voice" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600;">Go to Voice Entry</a>
         </div>
 
         <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
 
         <p style="color: #999; font-size: 13px; text-align: center;">Need help? Reply to this email or check your dashboard settings.</p>
+      </div>
+    `,
+  })
+}
+
+export async function sendSubscriptionReminderEmail(
+  email: string,
+  name: string,
+  planName: string,
+  daysLeft: number,
+  nextBillingDate: string,
+) {
+  const settingsUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://bolkebill.anshkaushal.in"}/dashboard/settings`
+
+  await transporter.sendMail({
+    from: FROM,
+    replyTo: "Anshh <anshh@bolkebill.anshkaushal.in>",
+    to: email,
+    subject: `Your ${planName} plan renews in ${daysLeft} day${daysLeft !== 1 ? "s" : ""} — BolKeBill™`,
+    html: `
+      <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px;">
+        <h1 style="font-size: 22px; margin-bottom: 4px;">Hi ${name},</h1>
+        <p style="color: #666; margin-bottom: 24px;">
+          Your <strong>${planName}</strong> subscription will renew on <strong>${nextBillingDate}</strong> (${daysLeft} day${daysLeft !== 1 ? "s" : ""} from today).
+        </p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px;">
+          <p style="margin: 0 0 8px; font-weight: 600;">Next billing: ${nextBillingDate}</p>
+          <p style="color: #666; margin: 0; font-size: 14px;">
+            You will be charged for the next cycle on this date. If you'd like to cancel or downgrade, please do so at least <strong>1 day before</strong> to avoid being charged.
+          </p>
+        </div>
+
+        <div style="text-align: center; margin-bottom: 24px;">
+          <a href="${settingsUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 32px; border-radius: 6px; font-weight: 600;">
+            Manage Subscription
+          </a>
+        </div>
+
+        <p style="color: #999; font-size: 13px; text-align: center;">
+          You received this because you have an active ${planName} subscription on BolKeBill™.
+        </p>
       </div>
     `,
   })

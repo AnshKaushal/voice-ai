@@ -102,6 +102,10 @@ function SettingsContent() {
     trialExpired: false,
     trialDaysLeft: 0,
     razorpaySubscriptionId: null as string | null,
+    pendingPlan: null as string | null,
+    pendingPlanName: null as string | null,
+    pendingPlanEffectiveDate: null as string | null,
+    nextBillingDate: null as string | null,
   })
 
   const [emailDialogOpen, setEmailDialogOpen] = useState(false)
@@ -117,6 +121,9 @@ function SettingsContent() {
   const [exporting, setExporting] = useState(false)
   const [exportFormat, setExportFormat] = useState("json")
   const [successPlan, setSuccessPlan] = useState<string | null>(null)
+  const [downgradeDialogOpen, setDowngradeDialogOpen] = useState(false)
+  const [downgradeTarget, setDowngradeTarget] = useState<string | null>(null)
+  const [downgrading, setDowngrading] = useState(false)
 
   useEffect(() => {
     if (session?.user?.name) {
@@ -443,9 +450,15 @@ function SettingsContent() {
             </div>
             <div className="text-right">
               <p className="font-medium">{subscription.credits} credits left</p>
-              {/* <p className="text-xs text-muted-foreground">
-                {subscription.monthlyCredits}/month
-              </p> */}
+              {subscription.razorpaySubscriptionId && subscription.nextBillingDate && (
+                <p className="text-xs text-muted-foreground">
+                  Next billing: {new Date(subscription.nextBillingDate).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </p>
+              )}
             </div>
           </div>
 
@@ -459,111 +472,111 @@ function SettingsContent() {
             </div>
           )}
 
+          {subscription.pendingPlan && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-amber-500" />
+                <span>
+                  Scheduled: Downgrade to{" "}
+                  <strong>{subscription.pendingPlanName}</strong> on{" "}
+                  {subscription.pendingPlanEffectiveDate
+                    ? new Date(
+                        subscription.pendingPlanEffectiveDate,
+                      ).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : ""}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelPending}
+              >
+                <X className="h-4 w-4 mr-1" />
+                Cancel
+              </Button>
+            </div>
+          )}
+
           <Separator />
 
           <div className="space-y-3">
             <p className="text-sm font-medium">
-              {isActive ? "Current Plan" : "Choose a plan"}
+              {isActive || subscription.subscription !== "free"
+                ? "Plans"
+                : "Choose a plan"}
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <Card
-                className={`cursor-pointer transition-all hover:border-primary ${
-                  subscription.subscription === "starter" && isActive
-                    ? "border-primary ring-1 ring-primary"
-                    : ""
-                }`}
-              >
-                <CardContent className="space-y-2">
-                  <Zap className="h-5 w-5 text-primary" />
-                  <p className="font-semibold">Starter</p>
-                  <p className="flex gap-2 items-end mb-2">
-                    <span className="text-2xl/6 font-bold">₹499</span>
-                    <span className="text-xs text-muted-foreground">
-                      per month
-                    </span>
-                  </p>
-                  <ul className="text-xs space-y-1 text-muted-foreground">
-                    <li>100 voice transcriptions/mo</li>
-                    <li>Unlimited invoices</li>
-                    <li>Inventory management</li>
-                    <li>Customer management</li>
-                    <li>Basic analytics (7-day view)</li>
-                    <li className="text-primary/70">
-                      ₹5 per additional transcription
-                    </li>
-                    <li className="text-primary/70">
-                      ₹2 per additional invoice
-                    </li>
-                  </ul>
-                  {isActive && subscription.subscription === "starter" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled
-                    >
-                      Current Plan
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleSubscribe("starter")}
-                    >
-                      {isTrialing ? "Subscribe" : "Switch"}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+              {[
+                { id: "starter" as const, name: "Starter", price: "₹499", credits: 100, features: ["100 voice transcriptions/mo", "Unlimited invoices", "Inventory management", "Customer management", "Basic analytics (7-day view)", "₹5 per additional transcription", "₹2 per additional invoice"] },
+                { id: "pro" as const, name: "Pro", price: "₹999", credits: 300, features: ["300 voice transcriptions/mo", "Unlimited invoices", "Priority support", "Advanced analytics", "₹3 per additional transcription", "₹1 per additional invoice"] },
+              ].map((plan) => {
+                const planKey = plan.id
+                const isCurrentPlan = subscription.subscription === planKey && isActive
+                const isHigherTier = planKey === "pro" && (subscription.subscription === "starter" || subscription.subscription === "free")
+                const isLowerTier = planKey === "starter" && subscription.subscription === "pro"
+                const canSubscribe = !isActive || subscription.subscription === "free"
 
-              <Card
-                className={`cursor-pointer transition-all hover:border-primary ${
-                  subscription.subscription === "pro" && isActive
-                    ? "border-primary ring-1 ring-primary"
-                    : ""
-                }`}
-              >
-                <CardContent className="space-y-2">
-                  <Zap className="h-5 w-5 text-primary" />
-                  <p className="font-semibold">Pro</p>
-                  <p className="flex gap-2 items-end mb-2">
-                    <span className="text-2xl/6 font-bold">₹999</span>
-                    <span className="text-xs text-muted-foreground">
-                      per month
-                    </span>
-                  </p>
-                  <ul className="text-xs space-y-1 text-muted-foreground">
-                    <li>300 voice transcriptions/mo</li>
-                    <li>Unlimited invoices</li>
-                    <li>Priority support</li>
-                    <li>Advanced analytics</li>
-                    <li className="text-primary/70">
-                      ₹3 per additional transcription
-                    </li>
-                    <li className="text-primary/70">
-                      ₹1 per additional invoice
-                    </li>
-                  </ul>
-                  {isActive && subscription.subscription === "pro" ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      disabled
-                    >
-                      Current Plan
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      className="w-full"
-                      onClick={() => handleSubscribe("pro")}
-                    >
-                      {isTrialing ? "Subscribe" : "Upgrade"}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+                let buttonLabel = ""
+                let buttonAction: (() => void) | null = null
+                let buttonDisabled = false
+
+                if (isCurrentPlan) {
+                  buttonLabel = "Current Plan"
+                  buttonDisabled = true
+                } else if (canSubscribe || isHigherTier) {
+                  buttonLabel = isHigherTier ? "Upgrade" : "Subscribe"
+                  buttonAction = () => handleSubscribe(planKey)
+                } else if (isLowerTier) {
+                  buttonLabel = "Downgrade"
+                  buttonAction = () => {
+                    setDowngradeTarget(planKey)
+                    setDowngradeDialogOpen(true)
+                  }
+                }
+
+                return (
+                  <Card
+                    key={planKey}
+                    className={`cursor-pointer transition-all hover:border-primary ${
+                      isCurrentPlan ? "border-primary ring-1 ring-primary" : ""
+                    }`}
+                  >
+                    <CardContent className="space-y-2">
+                      <Zap className="h-5 w-5 text-primary" />
+                      <p className="font-semibold">{plan.name}</p>
+                      <p className="flex gap-2 items-end mb-2">
+                        <span className="text-2xl/6 font-bold">{plan.price}</span>
+                        <span className="text-xs text-muted-foreground">
+                          per month
+                        </span>
+                      </p>
+                      <ul className="text-xs space-y-1 text-muted-foreground">
+                        {plan.features.map((f, i) => (
+                          <li key={i} className={i >= plan.features.length - 2 ? "text-primary/70" : ""}>{f}</li>
+                        ))}
+                      </ul>
+                      {buttonAction ? (
+                        <Button size="sm" className="w-full" onClick={buttonAction}>
+                          {buttonLabel}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={buttonDisabled}
+                        >
+                          {buttonLabel}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                )
+              })}
             </div>
           </div>
         </CardContent>
@@ -803,6 +816,15 @@ function SettingsContent() {
         onConfirm={handleDeleteAccount}
       />
 
+      <ConfirmDialog
+        open={downgradeDialogOpen}
+        onOpenChange={setDowngradeDialogOpen}
+        title={`Downgrade to ${downgradeTarget === "starter" ? "Starter" : "Free"}`}
+        description={`You'll keep your current plan features until the end of this billing cycle. On the next billing date, your plan will switch to ${downgradeTarget === "starter" ? "Starter (₹499/mo)" : "Free"} and your monthly credits will update accordingly.`}
+        confirmLabel={downgrading ? "Processing..." : "Confirm Downgrade"}
+        onConfirm={handleDowngrade}
+      />
+
       <Dialog
         open={!!successPlan}
         onOpenChange={(open) => !open && setSuccessPlan(null)}
@@ -829,6 +851,46 @@ function SettingsContent() {
       </Dialog>
     </div>
   )
+
+  async function handleDowngrade() {
+    if (!downgradeTarget) return
+    setDowngrading(true)
+    try {
+      const res = await fetch("/api/subscription/downgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: downgradeTarget }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(data.message)
+      setDowngradeDialogOpen(false)
+      // Refresh subscription data
+      const subRes = await fetch("/api/subscription")
+      const subData = await subRes.json()
+      if (!subData.error) setSubscription(subData)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to downgrade")
+    } finally {
+      setDowngrading(false)
+    }
+  }
+
+  async function handleCancelPending() {
+    try {
+      const res = await fetch("/api/subscription/cancel-pending", {
+        method: "POST",
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success("Pending plan change cancelled")
+      const subRes = await fetch("/api/subscription")
+      const subData = await subRes.json()
+      if (!subData.error) setSubscription(subData)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel")
+    }
+  }
 
   async function handleSubscribe(planId: "starter" | "pro") {
     try {

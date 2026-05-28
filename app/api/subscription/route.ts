@@ -4,6 +4,12 @@ import { connectDB } from "@/lib/mongodb"
 import { Business } from "@/lib/models/business"
 import { razorpay } from "@/lib/razorpay"
 
+const PLAN_CONFIG: Record<string, { name: string; credits: number }> = {
+  free: { name: "Free", credits: 0 },
+  starter: { name: "Starter", credits: 100 },
+  pro: { name: "Pro", credits: 300 },
+}
+
 export async function GET() {
   const { businessId, error } = await getAuthBusinessId()
   if (error) return error
@@ -12,7 +18,7 @@ export async function GET() {
 
   const business = await Business.findById(businessId)
     .select(
-      "subscription subscriptionStatus credits trialStart trialEnd razorpaySubscriptionId createdAt",
+      "subscription subscriptionStatus credits trialStart trialEnd razorpaySubscriptionId pendingPlan pendingPlanEffectiveDate createdAt",
     )
     .lean()
 
@@ -36,27 +42,51 @@ export async function GET() {
     Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)),
   )
 
-  let planName = "Free"
-  let monthlyCredits = 0
-  if (business.subscription === "starter") {
-    planName = "Starter"
-    monthlyCredits = 100
-  } else if (business.subscription === "pro") {
-    planName = "Pro"
-    monthlyCredits = 300
+  const config = PLAN_CONFIG[business.subscription as keyof typeof PLAN_CONFIG] || PLAN_CONFIG.free
+
+  let pendingPlanName: string | null = null
+  if (business.pendingPlan) {
+    pendingPlanName = PLAN_CONFIG[business.pendingPlan as keyof typeof PLAN_CONFIG]?.name || null
+  }
+
+  let nextBillingDate: string | null = null
+  if (business.razorpaySubscriptionId && (business.subscriptionStatus === "active" || business.subscriptionStatus === "trialing")) {
+    try {
+      const razorpaySub = await razorpay.subscriptions.fetch(business.razorpaySubscriptionId)
+      const currentEnd = razorpaySub.current_end
+      if (currentEnd) {
+        nextBillingDate = new Date(currentEnd * 1000).toISOString()
+      }
+    } catch {
+      // Razorpay fetch may fail — fall back to estimated date
+    }
+    // Fallback: estimate next billing from trialStart or createdAt + 30 days per cycle
+    if (!nextBillingDate) {
+      const baseDate = business.trialStart || business.createdAt || new Date()
+      const now = new Date()
+      let estimated = new Date(baseDate)
+      while (estimated <= now) {
+        estimated.setMonth(estimated.getMonth() + 1)
+      }
+      nextBillingDate = estimated.toISOString()
+    }
   }
 
   return NextResponse.json({
     subscription: business.subscription,
     subscriptionStatus: business.subscriptionStatus,
     credits: business.credits || 0,
-    monthlyCredits,
+    monthlyCredits: config.credits,
     trialStart: business.trialStart,
     trialEnd: business.trialEnd,
     trialExpired,
     trialDaysLeft,
-    planName,
+    planName: config.name,
     razorpaySubscriptionId: business.razorpaySubscriptionId || null,
+    pendingPlan: business.pendingPlan || null,
+    pendingPlanName,
+    pendingPlanEffectiveDate: business.pendingPlanEffectiveDate || null,
+    nextBillingDate,
   })
 }
 
@@ -75,11 +105,27 @@ export async function POST(request: Request) {
       )
     }
 
+    if (planId === "free") {
+      return NextResponse.json(
+        { error: "Cannot subscribe to free plan" },
+        { status: 400 },
+      )
+    }
+
     await connectDB()
 
     const business = await Business.findById(businessId)
     if (!business) {
       return NextResponse.json({ error: "Business not found" }, { status: 404 })
+    }
+
+    // Cancel old subscription immediately if upgrading
+    if (business.razorpaySubscriptionId) {
+      try {
+        await razorpay.subscriptions.cancel(business.razorpaySubscriptionId, false)
+      } catch {
+        // Old sub may already be cancelled — ignore
+      }
     }
 
     const razorpayPlanId =
