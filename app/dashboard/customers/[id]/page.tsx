@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,8 @@ import {
   Lock,
   FileText,
   ChevronRight,
+  Bell,
+  Loader2,
 } from "lucide-react"
 
 interface CustomerData {
@@ -87,6 +90,7 @@ export default function CustomerDetailPage() {
   const [analytics, setAnalytics] = useState<CustomerAnalytics | null>(null)
   const [isPaid, setIsPaid] = useState(false)
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false)
+  const [sendingReminder, setSendingReminder] = useState(false)
 
   useEffect(() => {
     fetchCustomer()
@@ -115,6 +119,29 @@ export default function CustomerDetailPage() {
     if (rate >= 70) return "High"
     if (rate >= 40) return "Medium"
     return "Low"
+  }
+
+  async function handleSendReminder() {
+    if (!customer || sendingReminder) return
+    setSendingReminder(true)
+    try {
+      const res = await fetch(`/api/customers/${customer._id}/remind`, {
+        method: "POST",
+      })
+      const data = await res.json()
+      if (data.waUrl) {
+        window.open(data.waUrl, "_blank")
+      }
+      if (data.emailSent) {
+        toast.success(`Reminder sent to ${customer.name}`)
+      } else {
+        toast.warning("Email could not be sent. WhatsApp link opened.")
+      }
+    } catch {
+      toast.error("Failed to send reminder")
+    } finally {
+      setSendingReminder(false)
+    }
   }
 
   function getRetentionColor(rate: number): string {
@@ -229,6 +256,22 @@ export default function CustomerDetailPage() {
             <p className="text-xs text-muted-foreground mt-1">
               Amount due on credit invoices
             </p>
+            {(analytics?.outstandingBalance || 0) > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 gap-1.5"
+                onClick={handleSendReminder}
+                disabled={sendingReminder}
+              >
+                {sendingReminder ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Bell className="h-3.5 w-3.5" />
+                )}
+                Send Reminder
+              </Button>
+            )}
           </CardContent>
         </Card>
 

@@ -41,7 +41,6 @@ import {
 } from "recharts"
 import { UpgradeDialog } from "@/components/upgrade-dialog"
 
-
 interface DashboardStats {
   totalInvoices: number
   totalRevenue: number
@@ -66,7 +65,11 @@ interface RecentInvoice {
 interface AnalyticsData {
   revenueByPeriod: { date: string; revenue: number; count: number }[]
   serviceUsage: { name: string; count: number; revenue: number }[]
-  customerGrowth: { date: string; newCustomers: number; totalCustomers: number }[]
+  customerGrowth: {
+    date: string
+    newCustomers: number
+    totalCustomers: number
+  }[]
   summary: {
     totalRevenue: number
     totalInvoices: number
@@ -112,7 +115,16 @@ const statusColors: Record<string, string> = {
   credit: "bg-primary/10 text-primary",
 }
 
-const CHART_COLORS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#db2777", "#0891b2", "#ca8a04"]
+const CHART_COLORS = [
+  "#2563eb",
+  "#059669",
+  "#d97706",
+  "#dc2626",
+  "#7c3aed",
+  "#db2777",
+  "#0891b2",
+  "#ca8a04",
+]
 
 function formatCurrency(n: number) {
   return `₹${n.toLocaleString("en-IN")}`
@@ -309,42 +321,6 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {stats?.trialExpired && (
-        <Card className="border-destructive/50 bg-destructive/5">
-          <CardContent className="flex items-start gap-3 pt-6">
-            <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-medium text-destructive">Trial Expired</p>
-              <p className="text-sm text-muted-foreground">
-                Your free trial has ended. Choose a plan to continue using voice transcription.
-              </p>
-            </div>
-            <Button size="sm" asChild>
-              <Link href="/dashboard/settings">Upgrade</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {stats?.subscriptionStatus === "trialing" && !stats?.trialExpired && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="h-5 w-5 text-primary" />
-              <div>
-                <p className="font-medium">Free Trial</p>
-                <p className="text-sm text-muted-foreground">
-                  {stats.trialDaysLeft} day{stats.trialDaysLeft !== 1 ? "s" : ""} remaining
-                </p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/dashboard/settings">View Plans</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
           <Card key={stat.title}>
@@ -361,7 +337,6 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Charts Section */}
       <div className="flex items-center gap-2">
         <BarChart3 className="h-5 w-5 text-muted-foreground" />
         <h2 className="text-lg font-semibold">Analytics</h2>
@@ -423,7 +398,10 @@ export default function DashboardPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={analytics.revenueByPeriod}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 11 }}
@@ -435,8 +413,15 @@ export default function DashboardPage() {
                       tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`}
                     />
                     <Tooltip
-                      formatter={(value) => [formatCurrency(Number(value)), "Revenue"]}
-                      contentStyle={{ borderRadius: 0, border: "1px solid var(--border)", background: "var(--background)" }}
+                      formatter={(value) => [
+                        formatCurrency(Number(value)),
+                        "Revenue",
+                      ]}
+                      contentStyle={{
+                        borderRadius: 0,
+                        border: "1px solid var(--border)",
+                        background: "var(--background)",
+                      }}
                       labelStyle={{ color: "var(--foreground)" }}
                     />
                     <Line
@@ -465,11 +450,25 @@ export default function DashboardPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={analytics.customerGrowth}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
-                    <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11 }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      className="text-muted-foreground"
+                    />
                     <Tooltip
-                      contentStyle={{ borderRadius: 0, border: "1px solid var(--border)", background: "var(--background)" }}
+                      contentStyle={{
+                        borderRadius: 0,
+                        border: "1px solid var(--border)",
+                        background: "var(--background)",
+                      }}
                       labelStyle={{ color: "var(--foreground)" }}
                     />
                     <Line
@@ -488,7 +487,9 @@ export default function DashboardPage() {
           {/* Service Popularity */}
           <Card className="break-inside-avoid">
             <CardHeader>
-              <CardTitle className="text-sm font-medium">Most Used Services</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Most Used Services
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {analytics.serviceUsage.length === 0 ? (
@@ -497,9 +498,19 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={analytics.serviceUsage.slice(0, 6)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis type="number" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                  <BarChart
+                    data={analytics.serviceUsage.slice(0, 6)}
+                    layout="vertical"
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis
+                      type="number"
+                      tick={{ fontSize: 11 }}
+                      className="text-muted-foreground"
+                    />
                     <YAxis
                       dataKey="name"
                       type="category"
@@ -509,7 +520,11 @@ export default function DashboardPage() {
                     />
                     <Tooltip
                       formatter={(value) => [Number(value), "Times used"]}
-                      contentStyle={{ borderRadius: 0, border: "1px solid var(--border)", background: "var(--background)" }}
+                      contentStyle={{
+                        borderRadius: 0,
+                        border: "1px solid var(--border)",
+                        background: "var(--background)",
+                      }}
                       labelStyle={{ color: "var(--foreground)" }}
                     />
                     <Bar dataKey="count" fill="var(--primary)" radius={0} />
@@ -519,16 +534,22 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Summary Cards */}
           <Card className="break-inside-avoid">
             <CardHeader>
-              <CardTitle className="text-sm font-medium">Period Summary</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Period Summary
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Total Revenue</span>
+                <span className="text-sm text-muted-foreground">
+                  Total Revenue
+                </span>
                 <span className="font-semibold">
-                  {formatCurrency(analytics.summary.totalRevenue - analytics.summary.outstandingCredit)}
+                  {formatCurrency(
+                    analytics.summary.totalRevenue -
+                      analytics.summary.outstandingCredit,
+                  )}
                   {analytics.summary.outstandingCredit > 0 && (
                     <span className="text-primary ml-1">
                       + {formatCurrency(analytics.summary.outstandingCredit)}
@@ -537,16 +558,28 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Avg. Invoice Value</span>
-                <span className="font-semibold">{formatCurrency(analytics.summary.averageInvoiceValue)}</span>
+                <span className="text-sm text-muted-foreground">
+                  Avg. Invoice Value
+                </span>
+                <span className="font-semibold">
+                  {formatCurrency(analytics.summary.averageInvoiceValue)}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Total Invoices</span>
-                <span className="font-semibold">{analytics.summary.totalInvoices}</span>
+                <span className="text-sm text-muted-foreground">
+                  Total Invoices
+                </span>
+                <span className="font-semibold">
+                  {analytics.summary.totalInvoices}
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Total Customers</span>
-                <span className="font-semibold">{analytics.summary.totalCustomers}</span>
+                <span className="text-sm text-muted-foreground">
+                  Total Customers
+                </span>
+                <span className="font-semibold">
+                  {analytics.summary.totalCustomers}
+                </span>
               </div>
               <div className="pt-2">
                 <Button variant="outline" size="sm" className="w-full" asChild>

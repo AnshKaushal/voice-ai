@@ -95,7 +95,7 @@ export async function GET(
         visitDates: visitDates.map((d) => d.toISOString?.() || d),
         mostPurchasedItems,
         retentionRate,
-        totalVisits: invoices.length,
+        totalVisits: customer.totalVisits,
         outstandingBalance,
       },
       meta: { isPaid },

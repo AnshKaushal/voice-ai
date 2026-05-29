@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { Invoice } from "@/lib/models/invoice";
+import { Customer } from "@/lib/models/customer";
 import { getAuthBusinessId } from "@/lib/api-auth";
 
 export async function GET(
@@ -84,6 +85,12 @@ export async function DELETE(
         { error: "Invoice not found" },
         { status: 404 }
       );
+    }
+
+    if (invoice.customerId) {
+      await Customer.findByIdAndUpdate(invoice.customerId, {
+        $inc: { totalVisits: -1, totalSpent: -invoice.total },
+      });
     }
 
     return NextResponse.json({ success: true });

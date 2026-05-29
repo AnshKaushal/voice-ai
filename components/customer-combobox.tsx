@@ -105,6 +105,7 @@ export function CustomerCombobox({
           placeholder={placeholder || "Search customers..."}
           disabled={disabled}
           showTrigger={false}
+          autoComplete="off"
         >
           <ComboboxContent>
             <ComboboxList>

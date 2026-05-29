@@ -72,12 +72,27 @@ function InventorySearchInput({
     }, 300)
   }
 
+  function capitalizeName(s: string) {
+    return s
+      .trim()
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(" ")
+  }
+
   function selectInventory(item: InventoryEntry) {
-    const name = item.name.charAt(0).toUpperCase() + item.name.slice(1)
+    const name = capitalizeName(item.name)
     onChange(name)
     onSelect({ name, price: item.price })
     setOpen(false)
     setResults([])
+  }
+
+  function handleBlur() {
+    setTimeout(() => setOpen(false), 200)
+    if (value.trim()) {
+      onChange(capitalizeName(value))
+    }
   }
 
   return (
@@ -87,7 +102,7 @@ function InventorySearchInput({
           value={value}
           onChange={(e) => handleInput(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={handleBlur}
           placeholder={placeholder}
           className="border-0 shadow-none focus-visible:ring-0 px-2 py-1 h-9"
         />

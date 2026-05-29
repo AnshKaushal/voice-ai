@@ -1,24 +1,35 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose"
 
 export interface IBusiness extends Document {
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  gstin?: string;
-  defaultTaxRate: number;
-  businessType: "workshop" | "tyre_shop" | "pharmacy" | "hardware" | "wholesale" | "general";
-  credits: number;
-  subscription: "free" | "starter" | "pro";
-  subscriptionStatus: "trialing" | "active" | "cancelled" | "expired" | "past_due";
-  razorpaySubscriptionId?: string;
-  pendingPlan?: "free" | "starter" | "pro" | null;
-  pendingPlanEffectiveDate?: Date | null;
-  remindersSent?: number[];
-  trialStart?: Date;
-  trialEnd?: Date;
-  createdAt: Date;
-  updatedAt: Date;
+  name: string
+  email: string
+  phone: string
+  address: string
+  gstin?: string
+  defaultTaxRate: number
+  businessType:
+    | "workshop"
+    | "tyre_shop"
+    | "pharmacy"
+    | "hardware"
+    | "wholesale"
+    | "general"
+  credits: number
+  subscription: "free" | "starter" | "pro"
+  subscriptionStatus:
+    | "trialing"
+    | "active"
+    | "cancelled"
+    | "expired"
+    | "past_due"
+  razorpaySubscriptionId?: string
+  pendingPlan?: "free" | "starter" | "pro" | null
+  pendingPlanEffectiveDate?: Date | null
+  remindersSent?: number[]
+  trialStart?: Date
+  trialEnd?: Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 const BusinessSchema = new Schema<IBusiness>(
@@ -31,7 +42,14 @@ const BusinessSchema = new Schema<IBusiness>(
     defaultTaxRate: { type: Number, default: 0 },
     businessType: {
       type: String,
-      enum: ["workshop", "tyre_shop", "pharmacy", "hardware", "wholesale", "general"],
+      enum: [
+        "workshop",
+        "tyre_shop",
+        "pharmacy",
+        "hardware",
+        "wholesale",
+        "general",
+      ],
       default: "general",
     },
     credits: { type: Number, default: 50 },
@@ -46,14 +64,19 @@ const BusinessSchema = new Schema<IBusiness>(
       default: "trialing",
     },
     razorpaySubscriptionId: { type: String, default: "" },
-    pendingPlan: { type: String, enum: ["free", "starter", "pro", null], default: null },
+    pendingPlan: {
+      type: String,
+      enum: ["free", "starter", "pro", null],
+      default: null,
+    },
     pendingPlanEffectiveDate: { type: Date, default: null },
     remindersSent: { type: [Number], default: [] },
     trialStart: { type: Date },
     trialEnd: { type: Date },
   },
-  { timestamps: true }
-);
+  { timestamps: true },
+)
 
 export const Business =
-  mongoose.models.Business ?? mongoose.model<IBusiness>("Business", BusinessSchema);
+  mongoose.models.Business ??
+  mongoose.model<IBusiness>("Business", BusinessSchema)

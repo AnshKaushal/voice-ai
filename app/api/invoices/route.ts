@@ -3,8 +3,17 @@ import { connectDB } from "@/lib/mongodb";
 import { Invoice } from "@/lib/models/invoice";
 import { Customer } from "@/lib/models/customer";
 import { Business } from "@/lib/models/business";
+import { InventoryItem } from "@/lib/models/inventory";
 import { generateInvoiceNumber, calculateTotals } from "@/lib/invoice-utils";
 import { getAuthBusinessId } from "@/lib/api-auth";
+
+function capitalize(str: string): string {
+  return str
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
 const MANUAL_CREDIT_COST = 0.5;
 
@@ -66,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     const items = (body.items || []).map(
       (item: { name: string; quantity: number; price: number }) => ({
-        name: item.name,
+        name: capitalize(item.name),
         quantity: item.quantity || 1,
         price: item.price || 0,
         total: (item.quantity || 1) * (item.price || 0),
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     const services = (body.services || []).map(
       (s: { name: string; price: number }) => ({
-        name: s.name,
+        name: capitalize(s.name),
         price: s.price || 0,
       })
     );
@@ -98,12 +107,12 @@ export async function POST(request: NextRequest) {
       if (!customer) customerId = null;
     }
     if (!customerId && body.customerName) {
-      let customer = await Customer.findOne({
+      const existing = await Customer.findOne({
         businessId,
         name: body.customerName,
       });
-      if (!customer) {
-        customer = await Customer.create({
+      if (!existing) {
+        const created = await Customer.create({
           businessId,
           name: body.customerName,
           phone: body.customerPhone || "",
@@ -111,15 +120,21 @@ export async function POST(request: NextRequest) {
           totalVisits: 1,
           totalSpent: totals.total,
         });
+        customerId = created._id;
       } else {
-        customer.totalVisits += 1;
-        customer.totalSpent += totals.total;
-        if (body.customerEmail && !customer.email) {
-          customer.email = body.customerEmail;
+        const update: Record<string, unknown> = {
+          $inc: { totalVisits: 1, totalSpent: totals.total },
+        };
+        if (body.customerEmail && !existing.email) {
+          update.$set = { email: body.customerEmail };
         }
-        await customer.save();
+        const updated = await Customer.findOneAndUpdate(
+          { _id: existing._id, businessId },
+          update,
+          { new: true }
+        );
+        customerId = updated!._id;
       }
-      customerId = customer._id;
     }
 
     const invoiceNumber = generateInvoiceNumber();
@@ -149,6 +164,37 @@ export async function POST(request: NextRequest) {
       await Business.findByIdAndUpdate(businessId, {
         $inc: { credits: -MANUAL_CREDIT_COST },
       });
+    }
+
+    // Auto-add missing items/services to inventory
+    const allEntries = [
+      ...items.map((i: { name: string; price: number }) => ({ name: i.name, price: i.price, type: "item" as const })),
+      ...services.map((s: { name: string; price: number }) => ({ name: s.name, price: s.price, type: "service" as const })),
+    ];
+    if (allEntries.length > 0) {
+      const existing = await InventoryItem.find({
+        businessId,
+        name: { $in: allEntries.map((e) => e.name) },
+      })
+        .select("name")
+        .lean();
+      const existingNames = new Set(existing.map((e) => e.name.toLowerCase()));
+
+      const toCreate = allEntries.filter(
+        (e) => !existingNames.has(e.name.toLowerCase())
+      );
+
+      if (toCreate.length > 0) {
+        await InventoryItem.insertMany(
+          toCreate.map((e) => ({
+            businessId,
+            name: e.name,
+            price: e.price,
+            category: e.type === "service" ? "Service" : "",
+            brand: "",
+          }))
+        );
+      }
     }
 
     return NextResponse.json({ invoice }, { status: 201 });

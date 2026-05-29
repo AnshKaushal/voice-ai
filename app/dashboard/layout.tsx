@@ -5,8 +5,7 @@ import {
 } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AppSidebar } from "@/components/dashboard/app-sidebar"
-import { UserMenu } from "@/components/user-menu"
-import { Separator } from "@/components/ui/separator"
+import { ChatSheet } from "@/components/chat-sheet"
 
 export default function DashboardLayout({
   children,
@@ -26,6 +25,7 @@ export default function DashboardLayout({
           <div className="flex-1 overflow-auto p-4 md:p-6">{children}</div>
         </SidebarInset>
       </SidebarProvider>
+      <ChatSheet />
     </TooltipProvider>
   )
 }

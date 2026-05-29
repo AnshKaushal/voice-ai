@@ -48,6 +48,7 @@ const navItems = [
       { title: "Invoices", href: "/dashboard/invoices", icon: FileText },
       { title: "Customers", href: "/dashboard/customers", icon: Users },
       { title: "Inventory", href: "/dashboard/inventory", icon: Package },
+
       { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
     ],
   },

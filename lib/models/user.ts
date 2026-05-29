@@ -1,16 +1,16 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose"
 
 export interface IUser extends Document {
-  email: string;
-  name?: string;
-  phone?: string;
-  password?: string;
-  image?: string;
-  emailVerified: Date | null;
-  onboardingCompleted: boolean;
-  businessId?: mongoose.Types.ObjectId;
-  createdAt: Date;
-  updatedAt: Date;
+  email: string
+  name?: string
+  phone?: string
+  password?: string
+  image?: string
+  emailVerified: Date | null
+  onboardingCompleted: boolean
+  businessId?: mongoose.Types.ObjectId
+  createdAt: Date
+  updatedAt: Date
 }
 
 const UserSchema = new Schema<IUser>(
@@ -24,8 +24,8 @@ const UserSchema = new Schema<IUser>(
     onboardingCompleted: { type: Boolean, default: false },
     businessId: { type: Schema.Types.ObjectId, ref: "Business" },
   },
-  { timestamps: true }
-);
+  { timestamps: true },
+)
 
 export const User =
-  mongoose.models.User ?? mongoose.model<IUser>("User", UserSchema);
+  mongoose.models.User ?? mongoose.model<IUser>("User", UserSchema)
