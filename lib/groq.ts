@@ -1,57 +1,62 @@
-import Groq from "groq-sdk";
-import { toFile } from "groq-sdk";
+import Groq from "groq-sdk"
+import { toFile } from "groq-sdk"
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
-});
+})
 
 export async function transcribeAudio(audioBuffer: Buffer): Promise<string> {
-  const file = await toFile(audioBuffer, "audio.wav");
+  const file = await toFile(audioBuffer, "audio.wav")
 
   const transcription = await groq.audio.transcriptions.create({
     file,
     model: "whisper-large-v3-turbo",
     language: "en",
     response_format: "verbose_json",
-    prompt: "Write Hinglish in Roman script: teen kilo, do sau rupaye, kaise ho aap, namaste, aloo, tamatar, baingan",
-  });
+    prompt:
+      "Write Hinglish in Roman script: teen kilo, do sau rupaye, kaise ho aap, namaste, aloo, tamatar, baingan",
+  })
 
-  return transcription.text;
+  return transcription.text
 }
 
 export interface ParsedInvoice {
-  customerName?: string;
-  customerPhone?: string;
+  customerName?: string
+  customerPhone?: string
   items: Array<{
-    name: string;
-    quantity: number;
-    price: number;
-  }>;
+    name: string
+    quantity: number
+    price: number
+  }>
   services: Array<{
-    name: string;
-    price: number;
-  }>;
-  labourCharges?: number;
-  discount?: number;
-  notes?: string;
+    name: string
+    price: number
+  }>
+  labourCharges?: number
+  discount?: number
+  notes?: string
 }
 
 interface InventoryItem {
-  name: string;
-  price: number;
-  category?: string;
-  brand?: string;
+  name: string
+  price: number
+  category?: string
+  brand?: string
 }
 
 export async function parseInvoiceFromTranscript(
   transcript: string,
-  inventory?: InventoryItem[]
+  inventory?: InventoryItem[],
 ): Promise<ParsedInvoice> {
-  const inventoryContext = inventory && inventory.length > 0
-    ? `\n\nYour inventory (match items against these products, use their prices if found):\n${inventory
-        .map((i) => `- ${i.name} (₹${i.price})${i.category ? ` [${i.category}]` : ""}${i.brand ? ` — ${i.brand}` : ""}`)
-        .join("\n")}`
-    : "";
+  const inventoryContext =
+    inventory && inventory.length > 0
+      ? `\n\nYour inventory (match items against these products, use their prices if found):\n${inventory
+          .map(
+            (i) =>
+              `- ${i.name} (₹${i.price})${i.category ? ` [${i.category}]` : ""}${i.brand ? ` — ${i.brand}` : ""}`,
+          )
+          .join("\n")}`
+      : ""
 
   const systemPrompt = `You are a business data extraction AI. Extract structured invoice data from voice transcript. The transcript is in Hinglish (Hindi + English mix in Roman script).
 
@@ -73,9 +78,9 @@ Rules:
 - Prices are in INR (₹)
 - Return ONLY valid JSON, no markdown, no explanation
 - CRITICAL: All numeric values must be plain numbers. NEVER output mathematical expressions like "200/3" — compute the result (e.g., 66.67).
-- When a price phrase like "both costing X rupees" or "each costing X rupees" follows a list of services, apply that price to EACH service. Do not leave services with price=0.${inventoryContext}`;
+- When a price phrase like "both costing X rupees" or "each costing X rupees" follows a list of services, apply that price to EACH service. Do not leave services with price=0.${inventoryContext}`
 
-  let lastError: unknown;
+  let lastError: unknown
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const completion = await groq.chat.completions.create({
@@ -89,11 +94,11 @@ Rules:
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
-      });
+      })
 
-      const content = completion.choices[0]?.message?.content || "{}";
+      const content = completion.choices[0]?.message?.content || "{}"
 
-      const parsed = JSON.parse(content) as ParsedInvoice;
+      const parsed = JSON.parse(content) as ParsedInvoice
       return {
         items: parsed.items || [],
         services: parsed.services || [],
@@ -102,10 +107,10 @@ Rules:
         labourCharges: parsed.labourCharges || 0,
         discount: parsed.discount || 0,
         notes: parsed.notes || "",
-      };
+      }
     } catch (err) {
-      lastError = err;
+      lastError = err
     }
   }
-  throw lastError;
+  throw lastError
 }

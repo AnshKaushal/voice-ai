@@ -1,17 +1,17 @@
-import Groq from "groq-sdk";
+import Groq from "groq-sdk"
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
-});
+})
 
 export interface CommandResult {
-  type: "navigate" | "query" | "action" | "help" | "unknown";
-  message: string;
-  path?: string;
-  queryType?: "invoices" | "stats" | "customers" | "inventory" | "outstanding";
-  params?: Record<string, unknown>;
-  action?: string;
-  suggestions?: string[];
+  type: "navigate" | "query" | "action" | "help" | "unknown"
+  message: string
+  path?: string
+  queryType?: "invoices" | "stats" | "customers" | "inventory" | "outstanding"
+  params?: Record<string, unknown>
+  action?: string
+  suggestions?: string[]
 }
 
 export async function parseCommand(message: string): Promise<CommandResult> {
@@ -70,7 +70,7 @@ Return ONLY valid JSON following this schema:
   "params": { "status": "...", "limit": 5, "customerName": "...", "search": "...", "name": "...", "price": 0, "category": "...", "brand": "..." },
   "action": "help" | "clear" | "add-inventory" | "send-reminder",
   "suggestions": ["Suggestion 1", "Suggestion 2", "Suggestion 3"]
-}`;
+}`
 
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
@@ -80,8 +80,8 @@ Return ONLY valid JSON following this schema:
     ],
     response_format: { type: "json_object" },
     temperature: 0.1,
-  });
+  })
 
-  const content = completion.choices[0]?.message?.content || "{}";
-  return JSON.parse(content) as CommandResult;
+  const content = completion.choices[0]?.message?.content || "{}"
+  return JSON.parse(content) as CommandResult
 }
